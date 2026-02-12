@@ -122,4 +122,28 @@ Populated by `refreshHoldingsPrices` job. No validator applied. One doc per (sym
 | price     | number | yes      |
 | updatedAt | string | yes      |
 
+### user_auth
+
+Used to map an internal app user to an external auth provider account (for example X).
+
+| Field            | Type   | Required |
+|------------------|--------|----------|
+| userId           | string | yes      |
+| provider         | string | yes      |
+| providerUserId   | string | yes      |
+| providerUsername | string | yes      |
+| createdAt        | string | yes      |
+| updatedAt        | string | yes      |
+
+Indexes:
+- Unique compound index on `(provider, providerUserId)`
+- Unique compound index on `(userId, provider)`
+
+Default seed on backend startup (idempotent) can be configured using:
+- `AUTH_SEED_ENABLED`
+- `AUTH_SEED_USER_ID`
+- `AUTH_SEED_PROVIDER`
+- `AUTH_SEED_PROVIDER_USER_ID`
+- `AUTH_SEED_PROVIDER_USERNAME`
+
 Types in application code: [src/types/portfolio.ts](../src/types/portfolio.ts) (Option, CoveredCall, ProtectivePut); [src/lib/straddle-strangle-analyzer.ts](../src/lib/straddle-strangle-analyzer.ts) (StraddleStrangle).

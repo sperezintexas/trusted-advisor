@@ -21,6 +21,14 @@ xai:
   api:
     key: ${XAI_API_KEY:}
 
+auth:
+  seed:
+    enabled: ${AUTH_SEED_ENABLED:true}
+    user-id: ${AUTH_SEED_USER_ID:default}
+    provider: ${AUTH_SEED_PROVIDER:x}
+    provider-user-id: ${AUTH_SEED_PROVIDER_USER_ID:x-seed-user-001}
+    provider-username: ${AUTH_SEED_PROVIDER_USERNAME:trusted_advisor_x_seed}
+
 logging:
   level:
     com.atxbogart: DEBUG

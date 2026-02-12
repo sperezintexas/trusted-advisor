@@ -7,7 +7,8 @@ AI trusted advisor with expert personas (Lawyer, Doctor, Tax Advisor, Finance Ex
 - **Multi-persona chat** — Predefined and custom personas; select in chat.
 - **Chat API** — `POST /api/chat`, `GET /api/chat/history`; history stored in MongoDB.
 - **Personas API** — `GET/POST/PUT/DELETE /api/personas` to manage custom personas.
-- **MongoDB** — Chat history, personas, chat config (see [database-schema](docs/database-schema.md)).
+- **Auth seed** — Bootstraps a `user_auth` record for X provider linking.
+- **MongoDB** — Chat history, personas, `user_auth`, chat config (see [database-schema](docs/database-schema.md)).
 
 ## Quick Start
 
@@ -31,7 +32,7 @@ docker compose up --build
 ## Configuration
 
 - **Backend:** `app/src/main/resources/application.yml` — server port, Spring name, MongoDB default, xAI key placeholder, logging.
-- **Secrets:** `.env` in project root (loaded by spring-dotenv). Set `MONGODB_URI`, `XAI_API_KEY`. Do not commit `.env`; use `.env.example` as template.
+- **Secrets:** `.env` in project root (loaded by spring-dotenv). Set `MONGODB_URI`, `XAI_API_KEY`. Optional auth seed envs: `AUTH_SEED_*`. Do not commit `.env`; use `.env.example` as template.
 
 ## Endpoints
 

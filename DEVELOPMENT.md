@@ -9,7 +9,7 @@
 ## Configuration
 
 - **App config:** `app/src/main/resources/application.yml` — port, Spring name, MongoDB default, xAI key placeholder, logging.
-- **Secrets:** `.env` in project root (spring-dotenv). Set `MONGODB_URI`, `XAI_API_KEY`. Copy from `.env.example`; do not commit `.env`.
+- **Secrets:** `.env` in project root (spring-dotenv). Set `MONGODB_URI`, `XAI_API_KEY`. Optional auth seed envs: `AUTH_SEED_*`. Copy from `.env.example`; do not commit `.env`.
 
 ## Running the App
 
@@ -69,7 +69,7 @@ On push/PR to `main`/`master`, [.github/workflows/ci.yml](.github/workflows/ci.y
 
 ## Database
 
-- MongoDB; URI from `application.yml` / `.env`. Collections: `personas`, `chatHistory` (see [docs/database-schema.md](docs/database-schema.md)).
+- MongoDB; URI from `application.yml` / `.env`. Collections: `personas`, `chatHistory`, `user_auth` (see [docs/database-schema.md](docs/database-schema.md)).
 
 ## AI (Grok/xAI)
 
