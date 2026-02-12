@@ -1,0 +1,31 @@
+# Git and IDE
+.git
+.gitignore
+.cursor
+*.iml
+.idea
+.vscode
+
+# Env (compose injects at runtime; avoid baking secrets)
+.env
+.env.*
+!.env.example
+
+# Build outputs (rebuilt in container)
+app/build
+frontend/.next
+frontend/out
+node_modules
+
+# Docs and misc
+README.md
+DEVELOPMENT.md
+docs
+*.md
+!frontend/package.json
+!frontend/package-lock.json
+
+# Tests (optional: remove if you want to run tests in image)
+**/test
+**/*.test.*
+**/*.spec.*

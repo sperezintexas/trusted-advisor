@@ -1,0 +1,21 @@
+# Build stage: Gradle + Java 21
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /build
+
+COPY gradle gradle
+COPY app app
+COPY gradlew gradlew
+COPY gradle.properties gradle.properties
+COPY settings.gradle.kts settings.gradle.kts
+
+RUN chmod +x gradlew && ./gradlew :app:bootJar --no-daemon
+RUN cp app/build/libs/*.jar app.jar
+
+# Run stage
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+COPY --from=builder /build/app.jar app.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

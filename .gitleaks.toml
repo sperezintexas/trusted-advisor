@@ -1,0 +1,16 @@
+# Gitleaks config for CI secret scanning.
+# See https://github.com/gitleaks/gitleaks#configuration
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore example/template and dependency files"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.sample$''',
+  '''(?:^|/)package-lock\.json$''',
+  '''(?:^|/)gradle-wrapper\.properties$''',
+  '''(?:^|/)\.github/''',
+  '''\.md$''',
+]
