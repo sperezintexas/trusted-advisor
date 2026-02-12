@@ -1,134 +1,370 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import AppHeader from '../components/AppHeader'
 
-interface Persona {
+type Persona = {
   id: string
   name: string
   description: string
   systemPrompt: string
 }
 
+type PersonaForm = {
+  name: string
+  description: string
+  systemPrompt: string
+}
+
+const EMPTY_FORM: PersonaForm = {
+  name: '',
+  description: '',
+  systemPrompt: '',
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const toPersonas = (value: unknown): Persona[] => {
+  if (!Array.isArray(value)) return []
+
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return []
+
+    const id = typeof item.id === 'string' ? item.id.trim() : ''
+    const name = typeof item.name === 'string' ? item.name.trim() : ''
+    const description =
+      typeof item.description === 'string' ? item.description : ''
+    const systemPrompt =
+      typeof item.systemPrompt === 'string' ? item.systemPrompt : ''
+
+    if (!id || !name) return []
+
+    return [{ id, name, description, systemPrompt }]
+  })
+}
+
+const errorMessage = (value: unknown): string =>
+  value instanceof Error ? value.message : 'Unknown error'
+
+const getResponseError = async (res: Response): Promise<string> => {
+  try {
+    const json = await res.json()
+    if (isRecord(json) && typeof json.message === 'string' && json.message.trim()) {
+      return json.message
+    }
+  } catch {
+    // Ignore parsing errors and fallback to status-based message.
+  }
+  return `Request failed (${res.status})`
+}
+
 export default function PersonasPage() {
   const [personas, setPersonas] = useState<Persona[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', description: '', systemPrompt: '' })
-  const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState<PersonaForm>(EMPTY_FORM)
+  const [loadingList, setLoadingList] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadPersonas()
+  const loadPersonas = useCallback(async () => {
+    setLoadingList(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/personas')
+      if (!res.ok) {
+        throw new Error(await getResponseError(res))
+      }
+
+      const data: unknown = await res.json()
+      setPersonas(toPersonas(data))
+    } catch (err) {
+      setError(`Could not load personas: ${errorMessage(err)}`)
+      setPersonas([])
+    } finally {
+      setLoadingList(false)
+    }
   }, [])
 
-  const loadPersonas = async () => {
-    const res = await fetch('/api/personas')
-    const data = await res.json()
-    setPersonas(data)
+  useEffect(() => {
+    void loadPersonas()
+  }, [loadPersonas])
+
+  const updateForm = <K extends keyof PersonaForm>(field: K, value: PersonaForm[K]) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
   }
 
   const savePersona = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    if (saving) return
+
+    const payload: PersonaForm = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      systemPrompt: form.systemPrompt.trim(),
+    }
+
+    if (!payload.name || !payload.description || !payload.systemPrompt) {
+      setError('Name, description, and system prompt are required.')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+    setSuccessMessage(null)
+
     const method = editingId ? 'PUT' : 'POST'
     const url = editingId ? `/api/personas/${editingId}` : '/api/personas'
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-    setEditingId(null)
-    setForm({ name: '', description: '', systemPrompt: '' })
-    loadPersonas()
-    setLoading(false)
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        throw new Error(await getResponseError(res))
+      }
+
+      setEditingId(null)
+      setForm(EMPTY_FORM)
+      setSuccessMessage(
+        method === 'PUT' ? 'Persona updated successfully.' : 'Persona created successfully.',
+      )
+      await loadPersonas()
+    } catch (err) {
+      setError(`Could not save persona: ${errorMessage(err)}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const editPersona = (persona: Persona) => {
+    setError(null)
+    setSuccessMessage(null)
     setEditingId(persona.id)
     setForm({
       name: persona.name,
       description: persona.description,
       systemPrompt: persona.systemPrompt,
     })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const deletePersona = async (id: string) => {
-    if (!confirm('Delete?')) return
-    await fetch(`/api/personas/${id}`, { method: 'DELETE' })
-    loadPersonas()
+  const cancelEditing = () => {
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+  }
+
+  const deletePersona = async (id: string, name: string) => {
+    if (deletingId) return
+    if (!confirm(`Delete persona "${name}"?`)) return
+
+    setDeletingId(id)
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      const res = await fetch(`/api/personas/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        throw new Error(await getResponseError(res))
+      }
+
+      setSuccessMessage('Persona deleted successfully.')
+      await loadPersonas()
+      if (editingId === id) {
+        cancelEditing()
+      }
+    } catch (err) {
+      setError(`Could not delete persona: ${errorMessage(err)}`)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--docs-bg)]">
+    <div className="flex min-h-screen flex-col bg-[var(--docs-bg)]">
       <AppHeader />
-      <main className="p-8 max-w-6xl mx-auto flex-1">
-      <h1 className="text-2xl font-semibold mb-2 text-[var(--docs-text)]">Manage Personas</h1>
-      <p className="mb-8 text-sm text-[var(--docs-muted)]">Create and edit expert personas used in chat.</p>
-      <form onSubmit={savePersona} className="bg-white p-6 rounded-lg shadow mb-8">
-        <input
-          placeholder="Name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="w-full p-2 border rounded mb-4"
-          required
-        />
-        <textarea
-          placeholder="Description"
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          className="w-full p-2 border rounded mb-4 h-24"
-          required
-        />
-        <textarea
-          placeholder="System Prompt (full persona description)"
-          value={form.systemPrompt}
-          onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
-          className="w-full p-2 border rounded mb-4 h-48"
-          required
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-6 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          {editingId ? 'Update' : 'Create'} Persona
-        </button>
-        {editingId && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingId(null)
-              setForm({ name: '', description: '', systemPrompt: '' })
-            }}
-            className="ml-4 px-6 py-2 bg-gray-500 text-white rounded"
-          >
-            Cancel
-          </button>
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8">
+        <h1 className="mb-2 text-2xl font-semibold text-[var(--docs-text)]">
+          Manage Personas
+        </h1>
+        <p className="mb-6 text-sm text-[var(--docs-muted)]">
+          Create and edit expert personas used in chat responses.
+        </p>
+
+        {error && (
+          <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+            {error}
+          </p>
         )}
-      </form>
-      <div className="grid gap-4">
-        {personas.map((p) => (
-          <div key={p.id} className="bg-white p-6 rounded-lg shadow flex justify-between items-start">
-            <div>
-              <h3 className="font-bold text-xl">{p.name}</h3>
-              <p className="text-gray-600">{p.description}</p>
-              <p className="mt-2 text-sm bg-yellow-100 p-2 rounded">
-                Prompt preview: {p.systemPrompt.substring(0, 100)}...
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => editPersona(p)} className="px-4 py-1 bg-blue-500 text-white rounded">
-                Edit
-              </button>
+        {successMessage && (
+          <p className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {successMessage}
+          </p>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="rounded-xl border border-[var(--docs-border)] bg-white p-5 shadow-sm">
+            <h2 className="mb-4 text-lg font-semibold text-[var(--docs-text)]">
+              {editingId ? 'Edit Persona' : 'Create Persona'}
+            </h2>
+            <form onSubmit={savePersona} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="persona-name"
+                  className="mb-1 block text-sm font-medium text-[var(--docs-text)]"
+                >
+                  Name
+                </label>
+                <input
+                  id="persona-name"
+                  placeholder="Ex: Long-term Portfolio Strategist"
+                  value={form.name}
+                  onChange={(e) => updateForm('name', e.target.value)}
+                  className="w-full rounded-lg border border-[var(--docs-border)] px-3 py-2 text-sm text-[var(--docs-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)]"
+                  maxLength={80}
+                  required
+                />
+                <p className="mt-1 text-xs text-[var(--docs-muted)]">
+                  {form.name.length}/80
+                </p>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="persona-description"
+                  className="mb-1 block text-sm font-medium text-[var(--docs-text)]"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="persona-description"
+                  placeholder="One-paragraph summary of what this persona should optimize for."
+                  value={form.description}
+                  onChange={(e) => updateForm('description', e.target.value)}
+                  className="h-24 w-full resize-y rounded-lg border border-[var(--docs-border)] px-3 py-2 text-sm text-[var(--docs-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)]"
+                  maxLength={240}
+                  required
+                />
+                <p className="mt-1 text-xs text-[var(--docs-muted)]">
+                  {form.description.length}/240
+                </p>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="persona-system-prompt"
+                  className="mb-1 block text-sm font-medium text-[var(--docs-text)]"
+                >
+                  System Prompt
+                </label>
+                <textarea
+                  id="persona-system-prompt"
+                  placeholder="Full persona behavior, constraints, and style instructions."
+                  value={form.systemPrompt}
+                  onChange={(e) => updateForm('systemPrompt', e.target.value)}
+                  className="h-56 w-full resize-y rounded-lg border border-[var(--docs-border)] px-3 py-2 font-mono text-xs text-[var(--docs-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)]"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-lg bg-[var(--docs-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving
+                    ? 'Saving...'
+                    : editingId
+                      ? 'Update Persona'
+                      : 'Create Persona'}
+                </button>
+
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={cancelEditing}
+                    className="rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)]"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+
+          <section className="rounded-xl border border-[var(--docs-border)] bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-[var(--docs-text)]">
+                Existing Personas
+              </h2>
               <button
-                onClick={() => deletePersona(p.id)}
-                className="px-4 py-1 bg-red-500 text-white rounded"
+                type="button"
+                onClick={() => void loadPersonas()}
+                className="rounded border border-[var(--docs-border)] px-2.5 py-1 text-xs text-[var(--docs-muted)] hover:bg-[var(--docs-code-bg)]"
               >
-                Delete
+                Refresh
               </button>
             </div>
-          </div>
-        ))}
-      </div>
+
+            {loadingList ? (
+              <p className="text-sm text-[var(--docs-muted)]">Loading personas...</p>
+            ) : personas.length === 0 ? (
+              <p className="text-sm text-[var(--docs-muted)]">
+                No personas yet. Create your first persona to customize chat behavior.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {personas.map((persona) => {
+                  const preview =
+                    persona.systemPrompt.length > 160
+                      ? `${persona.systemPrompt.slice(0, 160)}...`
+                      : persona.systemPrompt
+
+                  return (
+                    <article
+                      key={persona.id}
+                      className="rounded-lg border border-[var(--docs-border)] bg-[var(--docs-bg)] p-4"
+                    >
+                      <h3 className="text-base font-semibold text-[var(--docs-text)]">
+                        {persona.name}
+                      </h3>
+                      <p className="mt-1 text-sm text-[var(--docs-muted)]">
+                        {persona.description}
+                      </p>
+                      <p className="mt-2 rounded border border-[var(--docs-border)] bg-white px-2 py-1 font-mono text-xs text-[var(--docs-muted)]">
+                        {preview || 'No prompt preview available.'}
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => editPersona(persona)}
+                          className="rounded bg-[var(--docs-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deletingId === persona.id}
+                          onClick={() => void deletePersona(persona.id, persona.name)}
+                          className="rounded border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingId === persona.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </main>
     </div>
   )

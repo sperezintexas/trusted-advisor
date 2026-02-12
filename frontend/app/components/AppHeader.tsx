@@ -1,28 +1,65 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+type NavItem = {
+  href: string
+  label: string
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/chat', label: 'Chat' },
+  { href: '/personas', label: 'Personas' },
+]
 
 export default function AppHeader() {
+  const pathname = usePathname()
+
+  const navItemClass = (isActive: boolean) =>
+    [
+      'inline-flex items-center rounded-md px-2.5 py-1.5 text-sm transition-colors',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2',
+      isActive
+        ? 'bg-[var(--docs-code-bg)] text-[var(--docs-text)]'
+        : 'text-[var(--docs-muted)] hover:bg-[var(--docs-code-bg)] hover:text-[var(--docs-accent)]',
+    ].join(' ')
+
   return (
     <header className="sticky top-0 z-10 border-b border-[var(--docs-border)] bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
-        <Link href="/" className="font-semibold text-[var(--docs-text)] hover:opacity-80">
+      <div className="mx-auto flex h-14 max-w-4xl items-center justify-between gap-2 px-4">
+        <Link
+          href="/chat"
+          className="truncate font-semibold text-[var(--docs-text)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2"
+        >
           Trusted Advisor
         </Link>
         <nav className="flex items-center gap-4">
-          <Link
-            href="/chat"
-            className="text-sm text-[var(--docs-muted)] hover:text-[var(--docs-accent)]"
-          >
-            Chat
-          </Link>
+          {NAV_ITEMS.map((item) => {
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/' && pathname.startsWith(`${item.href}/`))
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={navItemClass(isActive)}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
           <Link
             href="/config"
-            className="inline-flex shrink-0 items-center justify-center size-5 rounded text-[var(--docs-muted)] hover:text-[var(--docs-accent)]"
+            className={navItemClass(pathname === '/config')}
             title="Prompt & persona configuration"
             aria-label="Configuration"
+            aria-current={pathname === '/config' ? 'page' : undefined}
           >
             <ConfigIcon />
+            <span className="ml-1.5 hidden sm:inline">Config</span>
           </Link>
         </nav>
       </div>
@@ -32,7 +69,7 @@ export default function AppHeader() {
 
 function ConfigIcon() {
   return (
-    <svg className="h-2 w-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
