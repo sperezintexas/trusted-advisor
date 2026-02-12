@@ -1,11 +1,21 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import AppHeader from '../components/AppHeader'
 
 export default function ConfigPage() {
+  const [origin, setOrigin] = useState('')
+
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
+
   return (
-    <div className="min-h-screen flex flex-col bg-white" style={{ backgroundImage: 'none' }}>
+    <div
+      className="flex min-h-screen flex-col bg-white"
+      style={{ backgroundImage: 'none' }}
+    >
       <AppHeader />
       <main className="mx-auto w-full max-w-3xl px-4 py-10">
         <h1 className="mb-2 text-2xl font-semibold text-[var(--docs-text)]">
@@ -30,18 +40,29 @@ export default function ConfigPage() {
             Personas
           </h2>
           <p className="mb-3 text-sm text-[var(--docs-muted)]">
-            Manage expert personas used in chat (finance, legal, tax, medical, trusted advisor).
+            Manage expert personas used in chat (finance, legal, tax, medical,
+            trusted advisor).
           </p>
           <div className="docs-path mb-3 inline-block">
-            GET /api/personas · POST /api/personas · PUT /api/personas/:id · DELETE /api/personas/:id
+            GET /api/personas · POST /api/personas · PUT /api/personas/:id ·
+            DELETE /api/personas/:id
           </div>
-          <Link
-            href="/personas"
-            className="inline-flex items-center rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)]"
-          >
-            Manage personas
-            <span className="ml-2">→</span>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/personas"
+              className="inline-flex items-center rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)]"
+            >
+              Manage personas
+              <span className="ml-2">→</span>
+            </Link>
+            <Link
+              href="/chat"
+              className="inline-flex items-center rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)]"
+            >
+              Open chat
+              <span className="ml-2">→</span>
+            </Link>
+          </div>
         </section>
 
         {/* Prompt & context */}
@@ -56,9 +77,15 @@ export default function ConfigPage() {
             GET /api/chat/config · PUT /api/chat/config
           </div>
           <div className="rounded-lg border border-[var(--docs-border)] bg-white p-4 text-sm text-[var(--docs-muted)]">
-            Chat config (tools, context.personaId, systemPromptOverride) can be saved per user. Use the
-            persona selector and system prompt field in <Link href="/chat" className="text-[var(--docs-accent)] hover:underline">Chat</Link> once
-            config endpoints are wired.
+            Chat config (tools, context.personaId, systemPromptOverride) can be
+            saved per user. Use the persona selector and system prompt field in{' '}
+            <Link
+              href="/chat"
+              className="text-[var(--docs-accent)] hover:underline"
+            >
+              Chat
+            </Link>{' '}
+            once config endpoints are wired.
           </div>
         </section>
 
@@ -68,7 +95,7 @@ export default function ConfigPage() {
             API base
           </h3>
           <p className="docs-path text-sm">
-            {typeof window !== 'undefined' ? window.location.origin : ''}/api
+            {origin || '[your-domain]'}/api
           </p>
           <p className="mt-2 text-xs text-[var(--docs-muted)]">
             Backend proxy: requests to /api/* are forwarded to the Spring Boot app (e.g. localhost:8080).
