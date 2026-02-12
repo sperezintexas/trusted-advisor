@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Docs-style (xAI API reference inspired) */
+:root {
+  --docs-bg: #fafafa;
+  --docs-border: #e5e7eb;
+  --docs-text: #111827;
+  --docs-muted: #6b7280;
+  --docs-code-bg: #f3f4f6;
+  --docs-accent: #2563eb;
+}
+
+body {
+  background: var(--docs-bg);
+  background-image: none;
+  background-size: auto;
+  color: var(--docs-text);
+  min-height: 100vh;
+}
+
+/* Contain main content like API docs - centered panel, no full-screen background */
+.app-container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+  background: #fff;
+  min-height: 100vh;
+  box-shadow: 0 0 0 1px var(--docs-border);
+}
+
+@media (min-width: 1024px) {
+  .app-container {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    min-height: auto;
+    border-radius: 8px;
+  }
+}
+
+.docs-path {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.875rem;
+  background: var(--docs-code-bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--docs-border);
+}
+
+/* API request/response block headers */
+.api-request-header { color: #b45309; }
+.api-response-header { color: #059669; }
