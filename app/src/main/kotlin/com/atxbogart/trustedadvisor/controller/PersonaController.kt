@@ -2,7 +2,7 @@ package com.atxbogart.trustedadvisor.controller
 
 import com.atxbogart.trustedadvisor.model.Persona
 import com.atxbogart.trustedadvisor.service.PersonaService
-import org.springframework.http.HttpStatus
+import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -12,7 +12,12 @@ import org.springframework.web.bind.annotation.*
 class PersonaController(private val service: PersonaService) {
 
     @GetMapping
-    fun list(): List<Persona> = service.findAll()
+    fun list(): ResponseEntity<List<Persona>> =
+        try {
+            ResponseEntity.ok(service.findAll())
+        } catch (e: DataAccessException) {
+            ResponseEntity.ok(emptyList())
+        }
 
     @PostMapping
     fun create(@RequestBody persona: Persona): Persona = service.save(persona)

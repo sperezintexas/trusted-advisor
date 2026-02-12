@@ -1,6 +1,6 @@
 ---
 name: test-commit-push
-version: "1.0.7"
+version: "1.0.8"
 description: Safe local dev → git workflow. Run tests, typecheck, lint, gitleaks; fix failures; bump app version when asked; generate conventional commit; suggest git add/commit/push. Use when preparing to commit, pushing changes, or when the user asks to test-commit-push.
 ---
 
