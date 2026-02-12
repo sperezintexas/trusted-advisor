@@ -3,3 +3,12 @@
 
 # Ignore Gradle build output directory
 build
+
+# Next.js frontend artifacts
+frontend/node_modules
+frontend/.next
+frontend/out
+
+# Local env and logs
+frontend/.env.local
+frontend/npm-debug.log*
