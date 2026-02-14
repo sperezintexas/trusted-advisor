@@ -16,7 +16,8 @@ management:
       exposure:
         include: "*"
 
-# From .env or environment: MONGODB_URI, XAI_API_KEY
+# Environment: loaded from repo-root .env when running (e.g. ./gradlew bootRun uses workingDir=root).
+# Set MONGODB_URI (or MONGODB_URI_B64), XAI_API_KEY in .env or system env.
 xai:
   api:
     key: ${XAI_API_KEY:}

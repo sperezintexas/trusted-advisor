@@ -8,18 +8,24 @@ type Persona = {
   name: string
   description: string
   systemPrompt: string
+  webSearchEnabled: boolean
+  yahooFinanceEnabled: boolean
 }
 
 type PersonaForm = {
   name: string
   description: string
   systemPrompt: string
+  webSearchEnabled: boolean
+  yahooFinanceEnabled: boolean
 }
 
 const EMPTY_FORM: PersonaForm = {
   name: '',
   description: '',
   systemPrompt: '',
+  webSearchEnabled: true,
+  yahooFinanceEnabled: true,
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -37,10 +43,12 @@ const toPersonas = (value: unknown): Persona[] => {
       typeof item.description === 'string' ? item.description : ''
     const systemPrompt =
       typeof item.systemPrompt === 'string' ? item.systemPrompt : ''
+    const webSearchEnabled = item.webSearchEnabled !== false
+    const yahooFinanceEnabled = item.yahooFinanceEnabled !== false
 
     if (!id || !name) return []
 
-    return [{ id, name, description, systemPrompt }]
+    return [{ id, name, description, systemPrompt, webSearchEnabled, yahooFinanceEnabled }]
   })
 }
 
@@ -105,6 +113,8 @@ export default function PersonasPage() {
       name: form.name.trim(),
       description: form.description.trim(),
       systemPrompt: form.systemPrompt.trim(),
+      webSearchEnabled: true,
+      yahooFinanceEnabled: form.yahooFinanceEnabled,
     }
 
     if (!payload.name || !payload.description || !payload.systemPrompt) {
@@ -151,6 +161,8 @@ export default function PersonasPage() {
       name: persona.name,
       description: persona.description,
       systemPrompt: persona.systemPrompt,
+      webSearchEnabled: persona.webSearchEnabled,
+      yahooFinanceEnabled: persona.yahooFinanceEnabled,
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -257,6 +269,38 @@ export default function PersonasPage() {
               </div>
 
               <div>
+                <p className="mb-2 text-sm font-medium text-[var(--docs-text)]">
+                  Tools for this persona
+                </p>
+                <div className="flex flex-wrap gap-6">
+                  <span className="flex items-center gap-2 text-sm text-[var(--docs-text)]">
+                    <input
+                      type="checkbox"
+                      checked
+                      readOnly
+                      tabIndex={-1}
+                      className="rounded border-[var(--docs-border)]"
+                      aria-label="Web search (always on)"
+                    />
+                    <span>Web search</span>
+                    <span className="text-xs text-[var(--docs-muted)]">(default on)</span>
+                  </span>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.yahooFinanceEnabled}
+                      onChange={(e) => updateForm('yahooFinanceEnabled', e.target.checked)}
+                      className="rounded border-[var(--docs-border)]"
+                    />
+                    <span className="text-sm text-[var(--docs-text)]">Yahoo Finance</span>
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-[var(--docs-muted)]">
+                  Web search is allowed for all personas. Optionally enable Yahoo Finance for live quotes and market data.
+                </p>
+              </div>
+
+              <div>
                 <label
                   htmlFor="persona-system-prompt"
                   className="mb-1 block text-sm font-medium text-[var(--docs-text)]"
@@ -326,6 +370,12 @@ export default function PersonasPage() {
                     persona.systemPrompt.length > 160
                       ? `${persona.systemPrompt.slice(0, 160)}...`
                       : persona.systemPrompt
+                  const toolsLabel = [
+                    persona.webSearchEnabled && 'Web search',
+                    persona.yahooFinanceEnabled && 'Yahoo Finance',
+                  ]
+                    .filter(Boolean)
+                    .join(', ') || 'None'
 
                   return (
                     <article
@@ -337,6 +387,9 @@ export default function PersonasPage() {
                       </h3>
                       <p className="mt-1 text-sm text-[var(--docs-muted)]">
                         {persona.description}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--docs-muted)]">
+                        Tools: {toolsLabel}
                       </p>
                       <p className="mt-2 rounded border border-[var(--docs-border)] bg-white px-2 py-1 font-mono text-xs text-[var(--docs-muted)]">
                         {preview || 'No prompt preview available.'}

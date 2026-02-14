@@ -5,10 +5,23 @@ package com.atxbogart.trustedadvisor
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
+import java.util.Base64
+import java.nio.charset.StandardCharsets
 
 @SpringBootApplication
 class App
 
 fun main(args: Array<String>) {
+    // If MONGODB_URI is not set but MONGODB_URI_B64 is, decode and set for application.yml
+    val uri = System.getenv("MONGODB_URI")
+    val uriB64 = System.getenv("MONGODB_URI_B64")
+    if ((uri == null || uri.isBlank()) && !uriB64.isNullOrBlank()) {
+        try {
+            val decoded = String(Base64.getDecoder().decode(uriB64.trim()), StandardCharsets.UTF_8)
+            if (decoded.isNotBlank()) System.setProperty("MONGODB_URI", decoded)
+        } catch (_: IllegalArgumentException) {
+            // Invalid Base64; leave MONGODB_URI unset so default or explicit URI is used
+        }
+    }
     runApplication<App>(*args)
 }

@@ -1,3 +1,11 @@
+import path from 'path'
+import { fileURLToPath } from 'url'
+import dotenv from 'dotenv'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+// Load repo-root .env so frontend and backend share the same env file
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') })
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',

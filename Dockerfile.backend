@@ -8,11 +8,14 @@ COPY gradlew gradlew
 COPY gradle.properties gradle.properties
 COPY settings.gradle.kts settings.gradle.kts
 
-RUN chmod +x gradlew && ./gradlew :app:bootJar --no-daemon
+# Use BuildKit cache mount for Gradle: DOCKER_BUILDKIT=1 for faster rebuilds
+RUN --mount=type=cache,target=/root/.gradle/caches \
+    chmod +x gradlew && ./gradlew :app:bootJar --no-daemon
 RUN cp app/build/libs/*.jar app.jar
 
 # Run stage
 FROM eclipse-temurin:21-jre-alpine
+RUN apk add --no-cache wget
 WORKDIR /app
 
 COPY --from=builder /build/app.jar app.jar

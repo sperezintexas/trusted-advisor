@@ -11,6 +11,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: '/chat', label: 'Chat' },
   { href: '/personas', label: 'Personas' },
+  { href: '/coach', label: 'Coach' },
 ]
 
 export default function AppHeader() {

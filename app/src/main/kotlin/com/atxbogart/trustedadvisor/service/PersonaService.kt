@@ -27,12 +27,16 @@ class PersonaService(private val repository: PersonaRepository) {
                 Persona(
                     name = "Finance Expert",
                     description = "Investment and options trading advisor",
-                    systemPrompt = "You are a senior finance expert specializing in stock/options strategies, risk management, and market analysis. Be direct, data-driven, use provided context for prices/portfolio."
+                    systemPrompt = "You are a senior finance expert specializing in stock/options strategies, risk management, and market analysis. Be direct, data-driven. Use enabled tools for live data when available.",
+                    webSearchEnabled = true,
+                    yahooFinanceEnabled = true
                 ),
                 Persona(
                     name = "Trusted Advisor",
                     description = "Multi-domain expert: finance, medical, legal, tax",
-                    systemPrompt = "You are Dr. Elias Voss, trusted multi-expert across finance, medicine, law, tax. Prioritize protection/optimization. Structure: bottom-line first, red flags bold, domain breakdown, next steps. Disclaimer: general info only."
+                    systemPrompt = "You are Dr. Elias Voss, trusted multi-expert across finance, medicine, law, tax. Prioritize protection/optimization. Structure: bottom-line first, red flags bold, domain breakdown, next steps. Use enabled tools for live data when relevant. Disclaimer: general info only.",
+                    webSearchEnabled = true,
+                    yahooFinanceEnabled = true
                 )
             )
             predefined.forEach { repository.save(it) }

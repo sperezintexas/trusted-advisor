@@ -9,7 +9,9 @@
 ## Configuration
 
 - **App config:** `app/src/main/resources/application.yml` — port, Spring name, MongoDB default, xAI key placeholder, logging.
-- **Secrets:** `.env` in project root (spring-dotenv). Set `MONGODB_URI`, `XAI_API_KEY`. Copy from `.env.example`; do not commit `.env`.
+- **Secrets:** One `.env` at the **repo root** is used by both backend and frontend. Copy from `.env.example`; do not commit `.env`.
+  - **Backend:** Spring Boot loads it via spring-dotenv (working dir is repo root when running `./gradlew bootRun`).
+  - **Frontend:** Next.js loads it via `dotenv` in `next.config.mjs` (path: `../.env`). Set `MONGODB_URI` (or `MONGODB_URI_B64`), `XAI_API_KEY`; optional `BACKEND_URL` for API proxy.
 
 ## Running the App
 
@@ -19,9 +21,11 @@
 docker compose up --build
 ```
 
-- App: http://localhost:3000 (frontend; `/api` → backend).
-- Backend: http://localhost:8080.
+- App: <http://localhost:3000> (frontend; `/api` → backend).
+- Backend: <http://localhost:8080>.
 - Uses local MongoDB in compose unless you override `MONGODB_URI` in `.env`.
+- Frontend starts only after backend is healthy; all services use `restart: unless-stopped`.
+- Faster rebuilds: `DOCKER_BUILDKIT=1 docker compose build` uses cache mounts for Gradle and npm.
 
 ### Local
 
@@ -30,15 +34,19 @@ docker compose up --build
 ./gradlew bootRun
 ```
 
-App at http://localhost:8080. Quick check: `curl http://localhost:8080/` and `curl http://localhost:8080/api/personas`.
+App at <http://localhost:8080>. Quick check: `curl http://localhost:8080/` and `curl http://localhost:8080/api/personas`.
 
 ### Frontend (optional, with backend already running)
+
+**Start the backend first** (see above), then:
 
 ```bash
 cd frontend && npm install --legacy-peer-deps && npm run dev
 ```
 
-Open http://localhost:3000; rewrites send `/api/*` to backend (or set `BACKEND_URL` for Docker backend).
+Open <http://localhost:3000>; rewrites send `/api/*` to the backend (or set `BACKEND_URL` for Docker backend).
+
+If you see **"Failed to proxy … socket hang up"** or **ECONNRESET** when using Chat or other `/api/*` features, the backend is likely not running or crashed. Start it with `./gradlew bootRun` from the project root.
 
 ## Build & Test
 

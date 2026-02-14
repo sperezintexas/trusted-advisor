@@ -1,0 +1,19 @@
+# Dependencies and build output (rebuilt in container)
+node_modules
+.next
+out
+
+# Env (injected at runtime via compose)
+.env
+.env.*
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+*.md
+
+# Tests and misc
+coverage
+*.test.*
+*.spec.*

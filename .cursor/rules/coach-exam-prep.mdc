@@ -1,0 +1,144 @@
+---
+description: Coach — securities licensing exam preparation (SIE / Series 7 / Series 57)
+globs:
+  - "apps/web/app/(app)/coach/**"
+  - "apps/web/components/Coach*.tsx"
+  - "apps/web/utils/actions/coach*.ts"
+  - "apps/web/hooks/useCoach*.ts"
+alwaysApply: false
+---
+
+# Coach – Securities Licensing Exam Preparation Guidelines
+
+You are building/maintaining the **Coach** module — a focused exam prep experience for FINRA securities licensing exams:
+
+- SIE   (Securities Industry Essentials)
+- Series 7   (General Securities Representative)
+- Series 57   (Securities Trader)
+
+## Core User Flow
+
+1. User lands on `/coach` → sees exam selector (SIE / 7 / 57)
+2. After choosing exam → enters practice mode
+3. System serves one question at a time (multiple choice, 4 options)
+4. User selects answer → immediate feedback (correct/incorrect + explanation)
+5. Progress is tracked per exam type (session-based + persistent stats)
+6. Optional: timed mode, category filtering, weak-area focus
+
+## Data Model (MongoDB)
+
+Collections:
+
+```ts
+// coachExams (small — only 3 documents expected)
+interface CoachExam {
+  _id: ObjectId
+  code: "SIE" | "SERIES_7" | "SERIES_57"
+  name: string                      // "Securities Industry Essentials", …
+  version: string                   // e.g. "2024 outline"
+  totalQuestionsInOutline: number
+  createdAt: Date
+  updatedAt: Date
+}
+
+// coachQuestions (main collection — thousands of documents)
+interface CoachQuestion {
+  _id: ObjectId
+  examCode: "SIE" | "SERIES_7" | "SERIES_57"
+  question: string
+  choices: { letter: "A"|"B"|"C"|"D", text: string }[]
+  correctLetter: "A"|"B"|"C"|"D"
+  explanation: string
+  outlineReference?: string         // e.g. "SIE-1.A.2", "7.2.3.1"
+  topic?: string                    // "Regulatory Entities", "Options Strategies", …
+  difficulty?: "easy" | "medium" | "hard"
+  source?: string                   // "manual", "imported-csv-2025-02", "grok-generated"
+  active: boolean                   // soft delete / quality control
+  createdAt: Date
+  updatedAt: Date
+}
+
+// coachUserProgress (per user / per exam)
+interface CoachUserProgress {
+  _id: ObjectId
+  userId: ObjectId
+  examCode: "SIE" | "SERIES_7" | "SERIES_57"
+  totalAsked: number
+  correct: number
+  lastSessionAt: Date
+  weakTopics: { topic: string; missCount: number }[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+Page & Component Structure
+textapp/(app)/coach/
+├── page.tsx                 # Exam selector + welcome
+├── [examCode]/
+│   ├── page.tsx             # Main practice screen (client component)
+│   ├── layout.tsx           # Optional — exam header / progress bar
+│   └── results/
+│       └── page.tsx         # Session summary / weak areas
+└── components/
+    ├── ExamSelector.tsx
+    ├── QuestionCard.tsx
+    ├── AnswerButtons.tsx
+    ├── FeedbackOverlay.tsx
+    ├── ProgressBar.tsx
+    └── StatsSummary.tsx
+Important Conventions
+
+Server Components by default — load questions/stats on server when possible
+Use 'use client' for:
+Question interaction (selection, timer, feedback animation)
+Session state (current question index, score, answered set)
+
+Prefer Server Actions for:
+recordAnswerAction — save correct/wrong + update progress
+resetSessionAction
+getNextQuestionAction (can be query + mutation in one action)
+
+Use SWR or React Query for optimistic question fetching if UX demands it
+Authentication: require logged-in user (use existing withAuth / useUser)
+
+Question Delivery Rules
+
+Filter: active: true + examCode
+Optional sort/boost logic (configurable later):
+weak topics first (missCount > 2)
+difficulty variation (avoid showing 5 hard in a row)
+unseen questions preferred
+
+Do not show the same question twice in one session
+
+Acceptance Criteria Checklist
+
+ User can select SIE / Series 7 / Series 57
+ Question is displayed with 4 radio / button choices
+ Immediate correct/incorrect feedback + explanation
+ Progress persists across sessions (per exam)
+ Basic stats visible (correct %, questions asked, weak topics)
+ No question repetition in same session
+ Clean mobile layout (QuestionCard must be readable on phone)
+
+ Seed / Import Strategy
+
+Initial seed: small set of 50–200 high-quality questions per exam (manual or Grok-generated)
+Future: CSV import route (/api/coach/import) or admin UI
+Quality gate: questions should have outline reference whenever possible
+Related Files to Watch / Update
+
+types/coach.ts               ← add CoachQuestion, CoachExam, CoachUserProgress
+utils/actions/coach.ts       ← server actions
+hooks/useCoachExam.ts        ← data fetching & session logic
+lib/mongodb.ts               ← add coach* collections if needed
+middleware.ts                ← ensure coach routes are protected
+
+Focus first on:
+
+Exam selector page
+Question fetching + display
+Answer recording + feedback
+Basic progress persistence
+
+Then iterate toward stats, weak-area targeting, timed mode, etc.

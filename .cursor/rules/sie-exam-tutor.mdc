@@ -1,0 +1,122 @@
+---
+description: SIE Exam content outline and tutor context for Coach / practice questions
+globs:
+  - "frontend/app/coach/**"
+  - "app/src/main/kotlin/com/atxbogart/trustedadvisor/**/Coach*"
+  - "app/src/main/kotlin/com/atxbogart/trustedadvisor/**/Coach*.kt"
+alwaysApply: false
+---
+
+# SIE Exam Tutor — Content Outline & Context
+
+Use this rule when building or editing **SIE (Securities Industry Essentials)** practice content, questions, explanations, or Coach UI copy. It reflects the FINRA SIE content outline so questions and feedback stay aligned with the real exam.
+
+## Exam Specs
+
+- **Questions:** 75 multiple-choice
+- **Time:** 1 hour 45 minutes
+- **Passing score:** 70%
+- **Eligibility:** Open to all; co-requisite for Series 57
+- **Sections:** 4 (per FINRA outline below)
+
+---
+
+## Section 1: Knowledge of Capital Markets (16%, 12 questions)
+
+**Focus:** Market structure, regulators, participants, economic factors.
+
+### Regulatory entities
+
+- **SEC** — Enforces federal securities laws
+- **FINRA / SROs** — Self-regulation (e.g., rules on options trading)
+- **State regulators (NASAA)** — Blue sky laws
+- **Federal Reserve** — Monetary policy (e.g., impact on margin borrowing, volatility)
+- **SIPC / FDIC** — Investor protection
+
+### Market participants
+
+- Investors (retail), Broker-Dealers, Issuers, Underwriters, Market Makers
+
+### Market types
+
+- **Primary** — New issues
+- **Secondary** — Exchanges (e.g., NASDAQ)
+- **Third / Fourth** — Institutional, dark pools
+
+### Economic factors
+
+- Fed rates (margin borrowing, LEAPs financing)
+- Business cycles, inflation (e.g., impact on options premiums)
+
+---
+
+## Section 2: Understanding Products and Their Risks (44%, 33 questions)
+
+**Focus:** Securities types, features, risks. High weight; options matter for Series 57 prep.
+
+### Equity securities
+
+- Common stock (voting, dividends), Preferred (fixed dividends)
+- Risks: Market, volatility
+
+### Debt securities
+
+- Corporate bonds, yields (inverse to price)
+- Risks: Interest rate, credit
+
+### Packaged products
+
+- Mutual funds, ETFs, REITs
+- Risks: Liquidity, fees
+
+### Options
+
+- Calls/puts; Greeks (e.g., delta); strategies (covered calls, wheel, spreads, straddles)
+- Risks: Time decay (theta), unlimited loss for naked sellers
+- Multi-leg: Spreads, straddles for risk management
+
+### Other
+
+- Annuities, alternatives (e.g., hedge funds)
+
+---
+
+## Section 3: Trading, Customer Accounts & Prohibited Activities (31%, 23 questions)
+
+**Focus:** Trading mechanics, account types, ethics.
+
+### Trading
+
+- Order types (market, limit), NBBO, settlement (e.g., T+1 for equities)
+
+### Customer accounts
+
+- Cash, Margin (e.g., borrow for LEAPs), Retirement (IRAs)
+
+### Returns
+
+- Capital gains, dividends, interest
+
+### Prohibited activities
+
+- Insider trading, manipulation (pump/dump), front-running
+- Compliance: Suitability (e.g., for aggressive strategies)
+
+---
+
+## Section 4: Overview of the Regulatory Framework (9%, 7 questions)
+
+**Focus:** Registration, ethics, reporting.
+
+- **Registration:** Form U4, continuing education
+- **Ethics:** Gifts, conflicts of interest (e.g., recommending high-risk options)
+- **Reporting:** SARs, complaint handling
+
+---
+
+## How to Use This Rule
+
+- **Writing SIE questions:** Tag or align questions to one of the four sections and topics above; keep explanations accurate and concise.
+- **Explanations / feedback:** Reference correct regulatory or product terms (e.g., FINRA, SIPC, theta, NBBO) where relevant.
+- **Coach UI / copy:** When mentioning SIE format, use 75 questions, 1 hr 45 min, 70% pass; section weights can inform “weak area” or topic labels.
+- **Study tips in-app:** Time (e.g., 20–30 hours over 2 weeks), mocks (75-question format), formulas (e.g., options breakeven), FINRA outline and practice exams.

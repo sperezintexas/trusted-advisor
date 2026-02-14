@@ -24,7 +24,7 @@ Repository guide for autonomous coding agents working on **Trusted Advisor**.
 
 1. Copy env file: `cp .env.example .env`
 2. Set required secrets in `.env`:
-   - `MONGODB_URI`
+   - `MONGODB_URI` or `MONGODB_URI_B64` (base64-encoded URI)
    - `XAI_API_KEY`
 
 Run modes:

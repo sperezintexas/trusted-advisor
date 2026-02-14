@@ -1,0 +1,23 @@
+---
+description: Configure APIs/tools for dynamic scenarios.
+globs: ["*.py", "*.ipynb"]
+---
+
+In code-related chats:
+
+- Yahoo Finance: Use yfinance for config (pip not needed; import yfinance; tickers=['TSLA','BA','RTX']; for t in tickers: print(yf.Ticker(t).info)).
+- Grok Tools: Simulate in code (e.g., web_search via requests if needed, but describe function calls like ### Cursor Rules for Grok Chat with Yahoo Finance APIs and Your Strategy
+
+Yahoo Finance Market News & Outlook Tool
+
+Fetch current market news, summaries, and outlook (e.g., trends, indices performance).
+Implementation: Extend /lib/yahoo-finance.ts with async function getMarketNewsAndOutlook(options: { limit?: number; region?: string }).
+Use yfinance or yahooquery library (install if missing: assume npm i yahoo-finance2 or similar).
+Return structured data: { news: [{ title, link, summary, date }], outlook: { summary, sentiment } }.
+Cache results for 5-15 mins via Next.js caching.
+Yahoo Finance Stock & Option Prices Tool
+
+Fetch real-time quotes for stocks and options (price, volume, change, chains for options).
+Implementation: Async function getStockAndOptionPrices(symbol: string, options?: { includeOptions?: boolean; expiration?: Date }) in /lib/yahoo-finance.ts.
+Handle errors: Fallback to cached data or notify user.
+Return: { stock: { price, change, volume }, options?: { calls: [...], puts: [...] } }.

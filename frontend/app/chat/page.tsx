@@ -8,6 +8,12 @@ type ChatRole = 'user' | 'assistant'
 type ChatMessage = { role: ChatRole; content: string }
 type Persona = { id: string; name: string; description: string }
 
+type ApiUsage = {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}
+
 const DEFAULT_USER_ID = 'default'
 
 const EXAMPLE_PROMPTS = [
@@ -17,6 +23,9 @@ const EXAMPLE_PROMPTS = [
   'Market outlook',
   'IONQ or ASTS targets for CSP 7–21 DTE',
 ]
+
+const SIE_TUTOR_INITIAL_PROMPT =
+  "I'm studying for the SIE exam. Help me review material and practice exam-style questions using the FINRA outline (capital markets, products & risks, trading & accounts, regulation)."
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
@@ -82,8 +91,11 @@ function ChatContent() {
   const [initialError, setInitialError] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [exampleOpen, setExampleOpen] = useState(false)
+  const [lastApiUsage, setLastApiUsage] = useState<ApiUsage | null>(null)
+  const [showApiStats, setShowApiStats] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
+  const appliedExamTutorRef = useRef(false)
 
   useEffect(() => {
     const q = searchParams.get('q')
@@ -92,6 +104,17 @@ function ChatContent() {
       requestAnimationFrame(() => composerRef.current?.focus())
     }
   }, [searchParams])
+
+  useEffect(() => {
+    if (loadingInitial || personas.length === 0 || appliedExamTutorRef.current) return
+    if (searchParams.get('exam') !== 'SIE') return
+    const optionsExamCoach = personas.find((p) => p.name === 'Options Exam Coach')
+    if (!optionsExamCoach) return
+    appliedExamTutorRef.current = true
+    setCurrentPersonaId(optionsExamCoach.id)
+    setInput(SIE_TUTOR_INITIAL_PROMPT)
+    requestAnimationFrame(() => composerRef.current?.focus())
+  }, [loadingInitial, personas, searchParams])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -197,6 +220,14 @@ function ChatContent() {
           ? data.response
           : 'No response received.'
 
+      const usage: ApiUsage | null = isRecord(data) && isRecord(data.usage)
+        ? {
+            prompt_tokens: typeof data.usage.prompt_tokens === 'number' ? data.usage.prompt_tokens : undefined,
+            completion_tokens: typeof data.usage.completion_tokens === 'number' ? data.usage.completion_tokens : undefined,
+            total_tokens: typeof data.usage.total_tokens === 'number' ? data.usage.total_tokens : undefined,
+          }
+        : null
+      setLastApiUsage(usage)
       setMessages((prev) => [...prev, { role: 'assistant', content: response }])
     } catch (err) {
       const message = errorMessage(err)
@@ -217,6 +248,8 @@ function ChatContent() {
     setMessages([])
     setExampleOpen(true)
     setSendError(null)
+    setLastApiUsage(null)
+    setShowApiStats(false)
     composerRef.current?.focus()
   }
 
@@ -351,8 +384,39 @@ function ChatContent() {
                 >
                   Clear view
                 </button>
+                {lastApiUsage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowApiStats((v) => !v)}
+                    className="rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm text-[var(--docs-muted)] hover:bg-[var(--docs-code-bg)]"
+                    aria-expanded={showApiStats}
+                  >
+                    xAI stats
+                  </button>
+                )}
               </div>
             </div>
+            {showApiStats && lastApiUsage && (
+              <div className="mt-2 rounded-lg border border-[var(--docs-border)] bg-[var(--docs-code-bg)] px-3 py-2 text-xs text-[var(--docs-muted)]">
+                <p className="font-medium text-[var(--docs-text)]">Last response (xAI API)</p>
+                <ul className="mt-1 list-inside list-disc space-y-0.5">
+                  {lastApiUsage.prompt_tokens != null && (
+                    <li>Prompt tokens: {lastApiUsage.prompt_tokens}</li>
+                  )}
+                  {lastApiUsage.completion_tokens != null && (
+                    <li>Completion tokens: {lastApiUsage.completion_tokens}</li>
+                  )}
+                  {lastApiUsage.total_tokens != null && (
+                    <li>Total tokens: {lastApiUsage.total_tokens}</li>
+                  )}
+                  {lastApiUsage.prompt_tokens == null &&
+                    lastApiUsage.completion_tokens == null &&
+                    lastApiUsage.total_tokens == null && (
+                      <li>No token usage reported for this response.</li>
+                    )}
+                </ul>
+              </div>
+            )}
             <p className="mt-2 text-xs text-[var(--docs-muted)]">
               Press Enter to send, Shift + Enter for a new line.
             </p>

@@ -25,6 +25,9 @@ dependencies {
     implementation(libs.jackson.module.kotlin)
     implementation(libs.spring.boot.starter.data.mongodb)
     implementation(libs.spring.boot.starter.webflux)
+    // Native DNS resolver on macOS (avoids UnsatisfiedLinkError when WebClient resolves hosts)
+    runtimeOnly("io.netty:netty-resolver-dns-native-macos:4.1.113.Final:osx-aarch_64")
+    runtimeOnly("io.netty:netty-resolver-dns-native-macos:4.1.113.Final:osx-x86_64")
     testImplementation(libs.spring.boot.starter.test)
 }
 
