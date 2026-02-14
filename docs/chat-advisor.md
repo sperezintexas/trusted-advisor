@@ -1,14 +1,16 @@
 # Smart Chat Advisor
 
-AI chat advisor for generic advice, powered by xAI Grok. Combines configurable tools (web search, market data, scheduled tasks) with a customizable prompts.
+AI chat advisor powered by xAI Grok. Persona-based system prompts; optional tools (web search, Yahoo Finance) per persona. Config (debug, tools, context) is in-memory; chat history in MongoDB.
 
 ## Overview
 
-- **Page**: `/chat` — Smart Grok Chat
-- **API**: `POST /api/chat` — chat with conversation history
-- **History**: `GET /api/chat/history` — load saved messages (per user)
-- **Config**: `GET/PUT /api/chat/config` — tools and context
-- **Storage**: Config in MongoDB `appUtil` collection (`key: grokChatConfig`); chat history in `chatHistory` collection (per user)
+- **Page**: `/chat` — Grok chat; select persona, optional xAI usage stats.
+- **Config page**: `/config` — enable debug, **Test xAI connection** (calls `GET /api/chat/config/test`).
+- **API**: `POST /api/chat` — body: `message`, optional `personaId`, `userId`; returns `{ response, usage? }`.
+- **History**: `GET /api/chat/history?userId=` — saved messages (per user).
+- **Config**: `GET/PUT /api/chat/config` — in-memory (debug, tools, context). Not persisted to DB.
+- **Test**: `GET /api/chat/config/test` — checks xAI connectivity; returns `{ success, message }`.
+- **Storage**: Chat history in `chatHistory` collection (per user).
 
 ## Rate limits (all chat APIs)
 
@@ -94,20 +96,18 @@ Appended dynamically:
 
 ## Config Schema
 
+Config is in-memory (lost on backend restart). Used by `/config` page and optionally by chat.
+
 ```ts
 {
-  tools: {
-    webSearch: boolean;      // default true — LLM tool (SerpAPI)
-    // Schedule tools (default on): list_tasks
-  };
-  context: {
-    riskProfile?: "low" | "medium" | "high" | "aggressive";  // default "medium"
-    strategyGoals?: string;   // max 2000 chars
-    systemPromptOverride?: string;  // max 4000 chars
-    persona?: string;        // default "finance-expert" — finance-expert | medical-expert | legal-expert | tax-expert | trusted-advisor
-  };
+  debug: boolean;   // default false — enable debug (e.g. verbose logging)
+  tools: Record<string, boolean>;   // e.g. webSearch, portfolio, coveredCallRecs
+  context: Record<string, string>;  // e.g. riskProfile, personaId
 }
 ```
+
+- **PUT /api/chat/config** accepts partial updates (e.g. `{ debug: true }`); other fields unchanged.
+- **GET /api/chat/config/test** — no auth; calls xAI with a minimal prompt; use to verify `XAI_API_KEY` and connectivity.
 
 ## Chat History
 

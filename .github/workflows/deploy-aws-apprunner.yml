@@ -1,0 +1,151 @@
+# Build backend + frontend images, push to ECR, optionally trigger App Runner deployment.
+# Requires: GitHub Secrets AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY.
+# Optional variables: ENABLE_AWS_DEPLOY, AWS_REGION, ECR_REPOSITORY_BACKEND, ECR_REPOSITORY_FRONTEND,
+#   APP_RUNNER_SERVICE_ARN_BACKEND, APP_RUNNER_SERVICE_ARN_FRONTEND.
+# See docs/aws-app-runner-requirements.md and docs/aws-apprunner-clean-deploy.md.
+name: Deploy to AWS App Runner
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-apprunner-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  ECR_BACKEND: ${{ vars.ECR_REPOSITORY_BACKEND || 'trusted-advisor-backend' }}
+  ECR_FRONTEND: ${{ vars.ECR_REPOSITORY_FRONTEND || 'trusted-advisor-frontend' }}
+
+jobs:
+  build-and-push:
+    name: Build and push to ECR
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR repos if missing
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_BACKEND }} --region ${{ env.AWS_REGION }} 2>/dev/null || \
+            aws ecr create-repository --repository-name ${{ env.ECR_BACKEND }} --region ${{ env.AWS_REGION }}
+          aws ecr describe-repositories --repository-names ${{ env.ECR_FRONTEND }} --region ${{ env.AWS_REGION }} 2>/dev/null || \
+            aws ecr create-repository --repository-name ${{ env.ECR_FRONTEND }} --region ${{ env.AWS_REGION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_BACKEND }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_BACKEND }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_FRONTEND }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_FRONTEND }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-backend:
+    name: Deploy backend to App Runner
+    needs: build-and-push
+    if: vars.ENABLE_AWS_DEPLOY == 'true' && vars.APP_RUNNER_SERVICE_ARN_BACKEND != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Start App Runner deployment (backend)
+        run: |
+          aws apprunner start-deployment \
+            --service-arn "${{ vars.APP_RUNNER_SERVICE_ARN_BACKEND }}" \
+            --region ${{ env.AWS_REGION }}
+        id: start
+
+      - name: Wait for deployment
+        run: |
+          ARN="${{ vars.APP_RUNNER_SERVICE_ARN_BACKEND }}"
+          REGION="${{ env.AWS_REGION }}"
+          for i in $(seq 1 30); do
+            STATUS=$(aws apprunner list-operations --service-arn "$ARN" --region "$REGION" --query 'OperationSummaryList[0].Status' --output text 2>/dev/null || echo "UNKNOWN")
+            if [ "$STATUS" = "SUCCEEDED" ]; then echo "Backend deployment succeeded"; exit 0; fi
+            if [ "$STATUS" = "FAILED" ]; then echo "Backend deployment failed"; exit 1; fi
+            echo "Waiting for backend deployment... ($STATUS)"
+            sleep 20
+          done
+          echo "Timeout waiting for backend deployment"
+          exit 1
+
+  deploy-frontend:
+    name: Deploy frontend to App Runner
+    needs: build-and-push
+    if: vars.ENABLE_AWS_DEPLOY == 'true' && vars.APP_RUNNER_SERVICE_ARN_FRONTEND != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Start App Runner deployment (frontend)
+        run: |
+          aws apprunner start-deployment \
+            --service-arn "${{ vars.APP_RUNNER_SERVICE_ARN_FRONTEND }}" \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for deployment
+        run: |
+          ARN="${{ vars.APP_RUNNER_SERVICE_ARN_FRONTEND }}"
+          REGION="${{ env.AWS_REGION }}"
+          for i in $(seq 1 30); do
+            STATUS=$(aws apprunner list-operations --service-arn "$ARN" --region "$REGION" --query 'OperationSummaryList[0].Status' --output text 2>/dev/null || echo "UNKNOWN")
+            if [ "$STATUS" = "SUCCEEDED" ]; then echo "Frontend deployment succeeded"; exit 0; fi
+            if [ "$STATUS" = "FAILED" ]; then echo "Frontend deployment failed"; exit 1; fi
+            echo "Waiting for frontend deployment... ($STATUS)"
+            sleep 20
+          done
+          echo "Timeout waiting for frontend deployment"
+          exit 1

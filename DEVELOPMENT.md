@@ -3,8 +3,10 @@
 ## Prerequisites
 
 - **Backend:** JDK 21+, Gradle (wrapper: `./gradlew`), MongoDB (URI in `.env`).
-- **Frontend (optional):** Node 18+.
+- **Frontend:** Node 18+ (optional for local dev; required for Docker).
 - **Docker (optional):** Docker and Docker Compose for one-command run.
+
+**UI routes:** `/chat` (personas, Grok), `/personas`, `/config` (debug, test xAI), `/coach` (exam list), `/coach/[examCode]` (practice/full exam), `/coach/history`.
 
 ## Configuration
 

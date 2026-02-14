@@ -6,19 +6,19 @@ Repository guide for autonomous coding agents working on **Trusted Advisor**.
 
 - **Backend:** Kotlin + Spring Boot (`/app`)
 - **Frontend:** Next.js 14 App Router + TypeScript (`/frontend`)
-- **Database:** MongoDB (`personas`, `chatHistory`, plus config docs in `docs/database-schema.md`)
-- **Primary API surface:** `/api/chat`, `/api/chat/history`, `/api/personas`
+- **Database:** MongoDB (`personas`, `chatHistory`, coach: `coachExams`, `coachQuestions`, `coachUserProgress`, `coachExamAttempts` — see `docs/database-schema.md`)
+- **Primary API:** `/api/chat`, `/api/chat/history`, `/api/chat/config`, `/api/chat/config/test`, `/api/personas`, `/api/coach/*` (exams, practice-session, check, score, history)
 
 ## 2) Directory Map
 
 - `app/src/main/kotlin/com/atxbogart/trustedadvisor`
-  - `controller/` HTTP endpoints
-  - `service/` business orchestration
-  - `repository/` Mongo repositories
-  - `model/` request/response/domain DTOs
-- `app/src/main/resources/application.yml` backend runtime config
-- `frontend/app/` Next.js routes (`/chat`, `/personas`, `/config`)
-- `docs/` product and architecture notes
+  - `controller/` — ChatController, PersonaController, CoachController, GlobalExceptionHandler
+  - `service/` — ChatService, GrokService, PersonaService, ChatConfigService, CoachService
+  - `repository/` — Mongo repositories
+  - `model/` — DTOs and domain types
+- `app/src/main/resources/application.yml` — backend config
+- `frontend/app/` — routes: `/chat`, `/personas`, `/config`, `/coach`, `/coach/[examCode]`, `/coach/history`
+- `docs/` — product and architecture notes
 
 ## 3) Setup and Run
 
@@ -77,10 +77,10 @@ Note: frontend `npm test` is currently a placeholder command that returns succes
 
 ## 6) API and Behavior Notes
 
-- `POST /api/chat` returns assistant output in `{ response: string }`.
-- `GET /api/chat/history?userId=...` returns message history list.
-- Persona selection influences system prompt used for chat generation.
-- Chat history is persisted to MongoDB for the selected user.
+- **Chat:** `POST /api/chat` returns `{ response, usage? }`. Persona (optional `personaId`) sets system prompt and tool hints (web search, Yahoo Finance). History in MongoDB.
+- **Config:** `GET/PUT /api/chat/config` — in-memory config (debug, tools, context). `GET /api/chat/config/test` — test xAI connection (no recording).
+- **Coach:** Practice/full exams per exam code (SIE, SERIES_7, SERIES_57). `GET .../check?questionId=&selectedLetter=` returns correct/correctLetter/explanation (no progress recording). `POST .../score` scores and optionally saves attempt.
+- Never commit `.env`; both backend and frontend use repo-root `.env`.
 
 ## 7) Commit and Push Checklist
 

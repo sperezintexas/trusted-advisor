@@ -1,8 +1,28 @@
-# Database schema validators
+# Database schema
 
-MongoDB collections used by the app can enforce a minimal schema so bad or partial documents are rejected at insert time. Validators are applied by the one-time script [scripts/mongo-validators.ts](../scripts/mongo-validators.ts).
+## Trusted Advisor app collections
 
-## How to run the validator setup
+Used by the Kotlin backend (Spring Data MongoDB). No validators are applied by default; the app relies on model types.
+
+| Collection | Purpose |
+|------------|---------|
+| **personas** | Custom chat personas (name, systemPrompt, webSearchEnabled, yahooFinanceEnabled). |
+| **chatHistory** | Per-user chat messages (`userId`, `messages`, `updatedAt`). |
+| **coachExams** | Exam metadata (code, name, version, totalQuestionsInOutline). |
+| **coachQuestions** | Multiple-choice questions (`examCode`, question, choices, correctLetter, explanation, topic, difficulty, active). |
+| **coachUserProgress** | Per-user progress per exam (`userId`, `examCode`, totalAsked, correct, weakTopics). |
+| **coachExamAttempts** | Saved exam results (`userId`, `examCode`, correct, total, percentage, passed, completedAt). |
+| **coachSessions** | Optional session state. |
+
+See `app/src/main/kotlin/.../model/*.kt` for exact field names and types.
+
+---
+
+## Optional: schema validators (legacy/other)
+
+The sections below describe validators for collections that may be used by other scripts or a different app surface. Validators are applied by the one-time script [scripts/mongo-validators.ts](../scripts/mongo-validators.ts) (if present).
+
+### How to run the validator setup
 
 1. Set environment variables:
    - `MONGODB_URI` (or `MONGODB_URI_B64` for base64-encoded URI)
