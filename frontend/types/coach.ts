@@ -1,4 +1,4 @@
-export type ExamCode = 'SIE' | 'SERIES_7' | 'SERIES_57'
+export type ExamCode = 'SIE' | 'SERIES_7' | 'SERIES_57' | 'SERIES_65'
 
 export type ChoiceLetter = 'A' | 'B' | 'C' | 'D'
 
@@ -109,6 +109,7 @@ const EXAM_NAMES: Record<ExamCode, string> = {
   SIE: 'Securities Industry Essentials',
   SERIES_7: 'General Securities Representative',
   SERIES_57: 'Securities Trader',
+  SERIES_65: 'Uniform Investment Adviser Law',
 }
 
 export function getExamName(code: ExamCode): string {
@@ -123,4 +124,5 @@ export const EXAM_CONFIG: Record<
   SIE: { questionCount: 75, timeMinutes: 105 },
   SERIES_7: { questionCount: 125, timeMinutes: 225 },
   SERIES_57: { questionCount: 50, timeMinutes: 90 },
+  SERIES_65: { questionCount: 130, timeMinutes: 180 },
 }

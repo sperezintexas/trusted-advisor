@@ -12,17 +12,16 @@ A conversational AI assistant powered by **xAI Grok**, with expert personas and 
 
 ---
 
-## Get started
+## Get started (local with .env)
 
-**Easiest: run with Docker**
+1. Copy `.env.example` to `.env` and set **AUTH_SECRET** (login password), **XAI_API_KEY**, and **MONGODB_URI** (or **MONGODB_URI_B64**) for your remote Mongo.
+2. **Backend:** from repo root run `./gradlew bootRun`
+3. **Frontend:** `cd frontend && npm install --legacy-peer-deps && npm run dev`
+4. Open **http://localhost:3000** and sign in with your AUTH_SECRET value.
 
-1. Copy `.env.example` to `.env` and add your **xAI API key** (and MongoDB URI if you’re not using the default local database).
-2. Run: `docker compose up --build`
-3. Open **http://localhost:3000** in your browser.
+Chat, Personas, Config, and Coach (including full practice exams) all work. The frontend proxies `/api` to the backend.
 
-You’ll see the main app (Chat, Personas, Config, Coach). The frontend talks to the backend automatically.
-
-**Other options (local backend + frontend, IDE setup, tests):** see **[DEVELOPMENT.md](DEVELOPMENT.md)** for full setup, run commands, and troubleshooting.
+**Docker:** optional — `docker compose up --build` runs both; see [DEVELOPMENT.md](DEVELOPMENT.md) for details and troubleshooting.
 
 ---
 

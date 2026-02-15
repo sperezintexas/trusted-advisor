@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useAuth, logout } from '@/lib/auth'
 
 type NavItem = {
   href: string
@@ -16,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function AppHeader() {
   const pathname = usePathname()
+  const { user } = useAuth()
 
   const navItemClass = (isActive: boolean) =>
     [
@@ -62,6 +64,29 @@ export default function AppHeader() {
             <ConfigIcon />
             <span className="ml-1.5 hidden sm:inline">Config</span>
           </Link>
+          {user && (
+            <span className="flex items-center gap-2 border-l border-[var(--docs-border)] pl-4">
+              {user.profileImageUrl ? (
+                <img
+                  src={user.profileImageUrl}
+                  alt=""
+                  className="h-7 w-7 rounded-full object-cover"
+                  width={28}
+                  height={28}
+                />
+              ) : null}
+              <span className="text-xs text-[var(--docs-muted)]" title={user.id}>
+                {user.displayName || user.username}
+              </span>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="text-sm text-[var(--docs-muted)] hover:text-[var(--docs-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)]"
+              >
+                Log out
+              </button>
+            </span>
+          )}
         </nav>
       </div>
     </header>

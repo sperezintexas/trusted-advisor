@@ -21,6 +21,7 @@ dependencies {
     implementation(platform(libs.spring.dotenv.bom))
     implementation(libs.springboot3.dotenv)
     implementation(libs.spring.boot.starter.web)
+    implementation("org.springframework.boot:spring-boot-starter-security")
     implementation(libs.kotlin.reflect)
     implementation(libs.jackson.module.kotlin)
     implementation(libs.spring.boot.starter.data.mongodb)

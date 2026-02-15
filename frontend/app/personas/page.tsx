@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import AppHeader from '../components/AppHeader'
+import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 type Persona = {
   id: string
@@ -82,7 +83,7 @@ export default function PersonasPage() {
     setError(null)
 
     try {
-      const res = await fetch('/api/personas')
+      const res = await fetch(apiUrl('/personas'), defaultFetchOptions())
       if (!res.ok) {
         throw new Error(await getResponseError(res))
       }
@@ -127,14 +128,13 @@ export default function PersonasPage() {
     setSuccessMessage(null)
 
     const method = editingId ? 'PUT' : 'POST'
-    const url = editingId ? `/api/personas/${editingId}` : '/api/personas'
+    const url = editingId ? apiUrl(`/personas/${editingId}`) : apiUrl('/personas')
 
     try {
-      const res = await fetch(url, {
+      const res = await fetch(url, defaultFetchOptions({
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      })
+      }))
 
       if (!res.ok) {
         throw new Error(await getResponseError(res))
@@ -181,7 +181,7 @@ export default function PersonasPage() {
     setSuccessMessage(null)
 
     try {
-      const res = await fetch(`/api/personas/${id}`, { method: 'DELETE' })
+      const res = await fetch(apiUrl(`/personas/${id}`), defaultFetchOptions({ method: 'DELETE' }))
       if (!res.ok) {
         throw new Error(await getResponseError(res))
       }

@@ -4,12 +4,14 @@ import AppHeader from '../components/AppHeader'
 import Link from 'next/link'
 import type { CoachExam, ExamCode } from '@/types/coach'
 import { EXAM_CONFIG } from '@/types/coach'
+import { apiUrl, defaultFetchOptions } from '@/lib/api'
 import { useCallback, useEffect, useState } from 'react'
 
 const EXAM_CODE_PATH: Record<ExamCode, string> = {
   SIE: 'SIE',
   SERIES_7: 'SERIES_7',
   SERIES_57: 'SERIES_57',
+  SERIES_65: 'SERIES_65',
 }
 
 function licenseLabel(code: ExamCode): string {
@@ -20,6 +22,8 @@ function licenseLabel(code: ExamCode): string {
       return 'Series 7'
     case 'SERIES_57':
       return 'Series 57'
+    case 'SERIES_65':
+      return 'Series 65'
     default:
       return code
   }
@@ -34,7 +38,7 @@ function formatTimeAllowed(minutes: number): string {
 }
 
 function isExamCode(s: string): s is ExamCode {
-  return s === 'SIE' || s === 'SERIES_7' || s === 'SERIES_57'
+  return s === 'SIE' || s === 'SERIES_7' || s === 'SERIES_57' || s === 'SERIES_65'
 }
 
 function toCoachExam(item: unknown): CoachExam | null {
@@ -60,7 +64,7 @@ export default function CoachPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/coach/exams')
+      const res = await fetch(apiUrl('/coach/exams'), defaultFetchOptions())
       if (!res.ok) throw new Error(res.statusText)
       const data = await res.json()
       const list = Array.isArray(data) ? data.map(toCoachExam).filter((e): e is CoachExam => e !== null) : []
@@ -123,10 +127,16 @@ export default function CoachPage() {
                   </span>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Link
-                      href={`/coach/${path}`}
+                      href={`/coach/${path}?mode=practice`}
                       className="rounded-lg bg-[var(--docs-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)]"
                     >
-                      Practice exam
+                      Practice exam (20 q)
+                    </Link>
+                    <Link
+                      href={`/coach/${path}?mode=full`}
+                      className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)]"
+                    >
+                      Full exam ({exam.totalQuestionsInOutline} q)
                     </Link>
                     {isSIE && (
                       <Link

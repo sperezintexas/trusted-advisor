@@ -10,7 +10,10 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env') })
 const nextConfig = {
   output: 'standalone',
   async rewrites() {
-    const backend = process.env.BACKEND_URL || 'http://localhost:8080'
+    const backend =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      process.env.BACKEND_URL ||
+      'http://localhost:8080'
     return [
       { source: '/api/:path*', destination: `${backend}/api/:path*` },
     ]

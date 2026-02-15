@@ -1,13 +1,14 @@
 {
   "name": "trusted-advisor-frontend",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "echo \"No tests yet\" && exit 0"
+    "test": "echo \"No tests yet\" && exit 0",
+    "test:x-post": "node scripts/test-x-post.mjs"
   },
   "dependencies": {
     "@types/node": "^20",
@@ -19,6 +20,7 @@
     "next": "14.2.18",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "twitter-api-v2": "^1.29.0",
     "typescript": "^5"
   },
   "devDependencies": {

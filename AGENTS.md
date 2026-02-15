@@ -26,12 +26,15 @@ Repository guide for autonomous coding agents working on **Trusted Advisor**.
 2. Set required secrets in `.env`:
    - `MONGODB_URI` or `MONGODB_URI_B64` (base64-encoded URI)
    - `XAI_API_KEY`
+   - `AUTH_SECRET` (shared API key; user enters it on the login page)
 
 Run modes:
 
 - **Docker (recommended):** `docker compose up --build`
 - **Backend local (repo root):** `./gradlew bootRun`
 - **Frontend local (from `frontend/`):** `npm install --legacy-peer-deps && npm run dev`
+
+**CLI env test (repo root):** `node scripts/test-env.mjs` — loads `.env`, reports AUTH_SECRET and tests xAI if `XAI_API_KEY` set.
 
 ## 4) Validation Commands (Run Before Commit)
 

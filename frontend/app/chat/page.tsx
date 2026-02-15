@@ -3,6 +3,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppHeader from '../components/AppHeader'
+import { useAuth } from '@/lib/auth'
+import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 type ChatRole = 'user' | 'assistant'
 type ChatMessage = { role: ChatRole; content: string }
@@ -13,8 +15,6 @@ type ApiUsage = {
   completion_tokens?: number
   total_tokens?: number
 }
-
-const DEFAULT_USER_ID = 'default'
 
 const EXAMPLE_PROMPTS = [
   'TSLA price',
@@ -82,6 +82,7 @@ const getResponseError = async (res: Response): Promise<string> => {
 
 function ChatContent() {
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [personas, setPersonas] = useState<Persona[]>([])
   const [currentPersonaId, setCurrentPersonaId] = useState('')
@@ -126,8 +127,8 @@ function ChatContent() {
 
     try {
       const [personaResult, historyResult] = await Promise.allSettled([
-        fetch('/api/personas'),
-        fetch(`/api/chat/history?userId=${DEFAULT_USER_ID}`),
+        fetch(apiUrl('/personas'), defaultFetchOptions()),
+        fetch(apiUrl('/chat/history'), defaultFetchOptions()),
       ])
 
       const loadErrors: string[] = []
@@ -201,14 +202,16 @@ function ChatContent() {
     setSendError(null)
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage.content,
-          personaId: currentPersonaId || undefined,
+      const res = await fetch(
+        apiUrl('/chat'),
+        defaultFetchOptions({
+          method: 'POST',
+          body: JSON.stringify({
+            message: userMessage.content,
+            personaId: currentPersonaId || undefined,
+          }),
         }),
-      })
+      )
 
       if (!res.ok) {
         throw new Error(await getResponseError(res))

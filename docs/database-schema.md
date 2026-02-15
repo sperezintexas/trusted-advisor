@@ -6,6 +6,7 @@ Used by the Kotlin backend (Spring Data MongoDB). No validators are applied by d
 
 | Collection | Purpose |
 |------------|---------|
+| **users** | App users (username, xId, displayName, profileImageUrl). Seeded with `atxbogart`; link by logging in with X. |
 | **personas** | Custom chat personas (name, systemPrompt, webSearchEnabled, yahooFinanceEnabled). |
 | **chatHistory** | Per-user chat messages (`userId`, `messages`, `updatedAt`). |
 | **coachExams** | Exam metadata (code, name, version, totalQuestionsInOutline). |

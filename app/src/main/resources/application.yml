@@ -6,8 +6,8 @@ spring:
     name: trusted-advisor
   data:
     mongodb:
+      # URI from .env: MONGODB_URI or MONGODB_URI_B64 (decoded in App.kt). Database from MONGODB_DATABASE only.
       uri: ${MONGODB_URI:mongodb://localhost:27017/trusted-advisor}
-      # Required when URI has no database path (e.g. mongodb+srv://...@host/)
       database: ${MONGODB_DATABASE:trusted-advisor}
 
 management:
@@ -17,10 +17,15 @@ management:
         include: "*"
 
 # Environment: loaded from repo-root .env when running (e.g. ./gradlew bootRun uses workingDir=root).
-# Set MONGODB_URI (or MONGODB_URI_B64), XAI_API_KEY in .env or system env.
+# Set MONGODB_URI (or MONGODB_URI_B64), XAI_API_KEY, AUTH_SECRET in .env.
 xai:
   api:
     key: ${XAI_API_KEY:}
+
+# API key auth: frontend sends X-API-Key or Authorization: Bearer <key>; must match AUTH_SECRET.
+app:
+  auth-secret: ${AUTH_SECRET:}
+  auth-debug: ${AUTH_DEBUG:false}
 
 logging:
   level:

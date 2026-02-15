@@ -14,12 +14,17 @@ import com.atxbogart.trustedadvisor.model.ScoreResponse
 import com.atxbogart.trustedadvisor.service.CoachService
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
+import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/coach")
 @CrossOrigin(origins = ["http://localhost:3000"])
 class CoachController(private val coachService: CoachService) {
+
+    private fun userIdOrUnauthorized(principal: ApiKeyPrincipal?): String? =
+        principal?.userId
 
     @GetMapping("/exams")
     fun getExams(): ResponseEntity<List<CoachExam>> =
@@ -59,18 +64,21 @@ class CoachController(private val coachService: CoachService) {
     @PostMapping("/answers/{examCode}")
     fun recordAnswer(
         @PathVariable examCode: String,
-        @RequestBody request: CoachAnswerRequest
+        @RequestBody request: CoachAnswerRequest,
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<RecordAnswerResponse> {
+        val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
-        val ok = coachService.recordAnswer(request.userId, request.questionId, request.selectedLetter)
+        val ok = coachService.recordAnswer(userId, request.questionId, request.selectedLetter)
         return ResponseEntity.ok(RecordAnswerResponse(correct = ok))
     }
 
     @GetMapping("/progress/{examCode}")
     fun getProgress(
         @PathVariable examCode: String,
-        @RequestParam userId: String = "default"
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<CoachUserProgress> {
+        val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
         return try {
             ResponseEntity.ok(coachService.getProgress(userId, code))
@@ -86,7 +94,7 @@ class CoachController(private val coachService: CoachService) {
     ): ResponseEntity<PracticeSessionResponse> {
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
         return try {
-            val session = coachService.getPracticeExamQuestions(code, count.coerceIn(1, 125))
+            val session = coachService.getPracticeExamQuestions(code, count.coerceIn(1, 200))
             ResponseEntity.ok(session)
         } catch (e: DataAccessException) {
             ResponseEntity.notFound().build()
@@ -94,18 +102,21 @@ class CoachController(private val coachService: CoachService) {
     }
 
     @GetMapping("/history")
-    fun getAttemptHistory(@RequestParam userId: String = "default"): ResponseEntity<List<CoachExamAttempt>> =
-        try {
+    fun getAttemptHistory(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<List<CoachExamAttempt>> {
+        val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
+        return try {
             ResponseEntity.ok(coachService.getAttemptHistory(userId))
         } catch (e: DataAccessException) {
             ResponseEntity.ok(emptyList())
         }
+    }
 
     @GetMapping("/exams/{examCode}/history")
     fun getExamAttemptHistory(
         @PathVariable examCode: String,
-        @RequestParam userId: String = "default"
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<List<CoachExamAttempt>> {
+        val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
         return try {
             ResponseEntity.ok(coachService.getAttemptHistoryByExam(userId, code))
@@ -117,13 +128,15 @@ class CoachController(private val coachService: CoachService) {
     @PostMapping("/exams/{examCode}/score")
     fun scorePracticeExam(
         @PathVariable examCode: String,
-        @RequestBody request: ScoreRequest
+        @RequestBody request: ScoreRequest,
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<ScoreResponse> {
+        val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
         return try {
             val score = coachService.scorePracticeExam(code, request.answers)
-            if (request.save == true && !request.userId.isNullOrBlank()) {
-                coachService.savePracticeExamResult(request.userId, code, score)
+            if (request.save == true) {
+                coachService.savePracticeExamResult(userId, code, score)
             }
             ResponseEntity.ok(score)
         } catch (e: DataAccessException) {
@@ -135,6 +148,7 @@ class CoachController(private val coachService: CoachService) {
         "SIE" -> ExamCode.SIE
         "SERIES_7", "SERIES7" -> ExamCode.SERIES_7
         "SERIES_57", "SERIES57" -> ExamCode.SERIES_57
+        "SERIES_65", "SERIES65" -> ExamCode.SERIES_65
         else -> null
     }
 

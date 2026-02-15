@@ -5,23 +5,51 @@ package com.atxbogart.trustedadvisor
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
-import java.util.Base64
+import java.io.File
 import java.nio.charset.StandardCharsets
+import java.util.Base64
 
 @SpringBootApplication
 class App
 
 fun main(args: Array<String>) {
-    // If MONGODB_URI is not set but MONGODB_URI_B64 is, decode and set for application.yml
-    val uri = System.getenv("MONGODB_URI")
-    val uriB64 = System.getenv("MONGODB_URI_B64")
+    loadEnvIntoSystemProperties()
+    ensureMongoUriFromB64()
+    runApplication<App>(*args)
+}
+
+/** Load .env from working dir into system properties so application.yml sees them (bootRun uses repo root). */
+private fun loadEnvIntoSystemProperties() {
+    val envFile = File(System.getProperty("user.dir"), ".env")
+    if (!envFile.isFile) return
+    envFile.readLines(StandardCharsets.UTF_8).forEach { line ->
+        val trimmed = line.trim()
+        if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+            val eq = trimmed.indexOf('=')
+            if (eq > 0) {
+                val key = trimmed.substring(0, eq).trim()
+                val value = trimmed.substring(eq + 1).trim().removeSurrounding("\"", "\"")
+                if (key.isNotEmpty() && System.getProperty(key) == null) System.setProperty(key, value)
+            }
+        }
+    }
+}
+
+/** Prefer MONGODB_URI_B64 from .env: decode and set MONGODB_URI so we never default to localhost when B64 is set. Database name comes from MONGODB_DATABASE only. */
+private fun ensureMongoUriFromB64() {
+    val uri = System.getProperty("MONGODB_URI") ?: System.getenv("MONGODB_URI")
+    val uriB64 = System.getProperty("MONGODB_URI_B64") ?: System.getenv("MONGODB_URI_B64")
     if ((uri == null || uri.isBlank()) && !uriB64.isNullOrBlank()) {
         try {
-            val decoded = String(Base64.getDecoder().decode(uriB64.trim()), StandardCharsets.UTF_8)
-            if (decoded.isNotBlank()) System.setProperty("MONGODB_URI", decoded)
+            var decoded = String(Base64.getDecoder().decode(uriB64.trim()), StandardCharsets.UTF_8)
+            if (decoded.isNotBlank()) {
+                // Strip database path from URI so spring.data.mongodb.database (MONGODB_DATABASE) is the single source
+                decoded = decoded.replace(Regex("/([^/?]+)(\\?.*)?$"), "$2").trimEnd('?')
+                if (decoded.endsWith("/")) decoded = decoded.dropLast(1)
+                System.setProperty("MONGODB_URI", decoded)
+            }
         } catch (_: IllegalArgumentException) {
             // Invalid Base64; leave MONGODB_URI unset so default or explicit URI is used
         }
     }
-    runApplication<App>(*args)
 }

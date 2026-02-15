@@ -11,6 +11,8 @@ import com.atxbogart.trustedadvisor.service.GrokTestResult
 import com.atxbogart.trustedadvisor.service.GrokService
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
+import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -23,16 +25,24 @@ class ChatController(
 ) {
 
     @PostMapping
-    fun chat(@RequestBody request: ChatRequest): ChatResponse =
-        chatService.sendMessage(request)
+    fun chat(
+        @RequestBody request: ChatRequest,
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
+    ): ResponseEntity<ChatResponse> {
+        val userId = principal?.userId ?: return ResponseEntity.status(401).build()
+        val scopedRequest = request.copy(userId = userId)
+        return ResponseEntity.ok(chatService.sendMessage(scopedRequest))
+    }
 
     @GetMapping("/history")
-    fun history(@RequestParam userId: String = "default"): ResponseEntity<List<ChatMessage>> =
-        try {
+    fun history(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<List<ChatMessage>> {
+        val userId = principal?.userId ?: return ResponseEntity.status(401).build()
+        return try {
             ResponseEntity.ok(chatService.getHistory(userId))
         } catch (e: DataAccessException) {
             ResponseEntity.ok(emptyList())
         }
+    }
 
     @GetMapping("/config")
     fun getConfig(): ChatConfig = chatConfigService.getConfig()

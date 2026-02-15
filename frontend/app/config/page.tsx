@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import AppHeader from '../components/AppHeader'
+import { useAuth } from '@/lib/auth'
+import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 type ChatConfig = {
   debug?: boolean
@@ -15,13 +17,23 @@ type GrokTestResult = {
   message: string
 }
 
+type AuthDebug = {
+  apiKeyConfigured: boolean
+  authDebugEnabled: boolean
+  userId: string | null
+  username: string | null
+}
+
 export default function ConfigPage() {
+  const { user } = useAuth()
   const [origin, setOrigin] = useState('')
   const [config, setConfig] = useState<ChatConfig>({})
   const [configLoading, setConfigLoading] = useState(true)
   const [configError, setConfigError] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<GrokTestResult | null>(null)
   const [testLoading, setTestLoading] = useState(false)
+  const [authDebug, setAuthDebug] = useState<AuthDebug | null>(null)
+  const [authDebugLoading, setAuthDebugLoading] = useState(true)
 
   useEffect(() => {
     setOrigin(window.location.origin)
@@ -31,7 +43,7 @@ export default function ConfigPage() {
     setConfigLoading(true)
     setConfigError(null)
     try {
-      const res = await fetch('/api/chat/config')
+      const res = await fetch(apiUrl('/chat/config'), defaultFetchOptions())
       if (!res.ok) throw new Error(`Config: ${res.status}`)
       const data = (await res.json()) as ChatConfig
       setConfig(data)
@@ -46,16 +58,33 @@ export default function ConfigPage() {
     void loadConfig()
   }, [loadConfig])
 
+  const loadAuthDebug = useCallback(async () => {
+    setAuthDebugLoading(true)
+    try {
+      const res = await fetch(apiUrl('/debug/auth'), defaultFetchOptions())
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = (await res.json()) as AuthDebug
+      setAuthDebug(data)
+    } catch {
+      setAuthDebug(null)
+    } finally {
+      setAuthDebugLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadAuthDebug()
+  }, [loadAuthDebug])
+
   const setDebug = useCallback(
     async (debug: boolean) => {
       const next = { ...config, debug }
       setConfig(next)
       try {
-        const res = await fetch('/api/chat/config', {
+        const res = await fetch(apiUrl('/chat/config'), defaultFetchOptions({
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(next),
-        })
+        }))
         if (!res.ok) throw new Error(`Save: ${res.status}`)
       } catch (e) {
         setConfigError(e instanceof Error ? e.message : 'Failed to save config')
@@ -68,7 +97,7 @@ export default function ConfigPage() {
     setTestLoading(true)
     setTestResult(null)
     try {
-      const res = await fetch('/api/chat/config/test')
+      const res = await fetch(apiUrl('/chat/config/test'), defaultFetchOptions())
       const data = (await res.json()) as GrokTestResult
       setTestResult(data)
     } catch (e) {
@@ -103,6 +132,95 @@ export default function ConfigPage() {
           </a>
           .
         </p>
+
+        {/* Auth debug */}
+        <section className="mb-12">
+          <h2 className="mb-1 text-lg font-medium text-[var(--docs-text)]">
+            Auth
+          </h2>
+          <p className="mb-3 text-sm text-[var(--docs-muted)]">
+            Session and API key configuration (for debugging).
+          </p>
+          <div className="docs-path mb-3 inline-block">
+            GET /api/debug/auth · GET /api/me
+          </div>
+          <div className="rounded-lg border border-[var(--docs-border)] bg-white p-4">
+            {authDebugLoading && (
+              <p className="text-sm text-[var(--docs-muted)]">Loading…</p>
+            )}
+            {!authDebugLoading && authDebug && (
+              <dl className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <dt className="font-medium text-[var(--docs-muted)]">
+                    API key configured:
+                  </dt>
+                  <dd>
+                    <span
+                      className={
+                        authDebug.apiKeyConfigured
+                          ? 'text-green-600'
+                          : 'text-amber-600'
+                      }
+                    >
+                      {authDebug.apiKeyConfigured ? 'Yes' : 'No'}
+                    </span>
+                  </dd>
+                </div>
+                <div className="flex items-center gap-2">
+                  <dt className="font-medium text-[var(--docs-muted)]">
+                    Login debug (AUTH_DEBUG):
+                  </dt>
+                  <dd>
+                    <span
+                      className={
+                        authDebug.authDebugEnabled
+                          ? 'text-green-600'
+                          : 'text-[var(--docs-muted)]'
+                      }
+                    >
+                      {authDebug.authDebugEnabled ? 'On' : 'Off'}
+                    </span>
+                  </dd>
+                </div>
+                <div className="flex items-center gap-2">
+                  <dt className="font-medium text-[var(--docs-muted)]">
+                    Backend session:
+                  </dt>
+                  <dd className="font-mono text-xs">
+                    {authDebug.userId ?? '—'}
+                  </dd>
+                </div>
+                <div className="flex items-center gap-2">
+                  <dt className="font-medium text-[var(--docs-muted)]">
+                    Username:
+                  </dt>
+                  <dd>{authDebug.username ?? '—'}</dd>
+                </div>
+                {user && (
+                  <div className="flex items-center gap-2 pt-2 border-t border-[var(--docs-border)]">
+                    <dt className="font-medium text-[var(--docs-muted)]">
+                      Frontend (useAuth):
+                    </dt>
+                    <dd className="flex items-center gap-2">
+                      {user.profileImageUrl && (
+                        <img
+                          src={user.profileImageUrl}
+                          alt=""
+                          className="h-8 w-8 rounded-full object-cover"
+                          width={32}
+                          height={32}
+                        />
+                      )}
+                      <span>
+                        {user.displayName || user.username} ({user.id})
+                      </span>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            )}
+          </div>
+        </section>
 
         {/* Personas */}
         <section className="mb-12">

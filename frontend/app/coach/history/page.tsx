@@ -4,9 +4,8 @@ import AppHeader from '../../components/AppHeader'
 import Link from 'next/link'
 import type { CoachExamAttempt, ExamCode } from '@/types/coach'
 import { getExamName } from '@/types/coach'
+import { apiUrl, defaultFetchOptions } from '@/lib/api'
 import { useCallback, useEffect, useState } from 'react'
-
-const DEFAULT_USER_ID = 'default'
 
 function toAttempt(raw: unknown): CoachExamAttempt | null {
   if (typeof raw !== 'object' || raw === null) return null
@@ -58,7 +57,8 @@ export default function CoachHistoryPage() {
     setError(null)
     try {
       const res = await fetch(
-        `/api/coach/history?userId=${encodeURIComponent(DEFAULT_USER_ID)}`
+        apiUrl('/coach/history'),
+        defaultFetchOptions()
       )
       if (!res.ok) throw new Error(res.statusText)
       const data = await res.json()

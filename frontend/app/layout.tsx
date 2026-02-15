@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import packageJson from '../package.json'
+import AuthGuard from './components/AuthGuard'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,12 +18,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="app-container">
-          {children}
-          <footer className="mt-auto border-t border-[var(--docs-border)] py-3 px-4 text-center text-xs text-[var(--docs-muted)]">
-            v{packageJson.version}
-          </footer>
-        </div>
+        <AuthGuard>
+          <div className="app-container">
+            {children}
+            <footer className="mt-auto border-t border-[var(--docs-border)] py-3 px-4 text-center text-xs text-[var(--docs-muted)]">
+              v0.2.3
+            </footer>
+          </div>
+        </AuthGuard>
       </body>
     </html>
   )
