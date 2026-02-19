@@ -4,6 +4,7 @@ const BACKEND_ORIGIN =
     : 'http://localhost:8080'
 
 const API_KEY_STORAGE_KEY = 'trusted_advisor_api_key'
+const USER_ID_STORAGE_KEY = 'trusted_advisor_user_id'
 
 /**
  * Backend origin (no path).
@@ -50,6 +51,21 @@ export function clearStoredApiKey(): void {
   localStorage.removeItem(API_KEY_STORAGE_KEY)
 }
 
+export function getStoredUserId(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(USER_ID_STORAGE_KEY)
+}
+
+export function setStoredUserId(id: string): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(USER_ID_STORAGE_KEY, id)
+}
+
+export function clearStoredUserId(): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(USER_ID_STORAGE_KEY)
+}
+
 /**
  * Default fetch options: credentials include, JSON content type, and X-API-Key header when key is stored.
  */
@@ -58,6 +74,8 @@ export function defaultFetchOptions(init?: RequestInit): RequestInit {
   const headers = new Headers(init?.headers)
   headers.set('Content-Type', 'application/json')
   if (key) headers.set('X-API-Key', key)
+  const userId = typeof window !== 'undefined' ? getStoredUserId() : null
+  if (userId) headers.set('X-User-Id', userId)
   return {
     ...init,
     credentials: 'include',

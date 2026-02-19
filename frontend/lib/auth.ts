@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { apiUrl, getStoredApiKey, clearStoredApiKey, defaultFetchOptions } from './api'
+import { apiUrl, getStoredApiKey, clearStoredApiKey, clearStoredUserId, defaultFetchOptions } from './api'
 
 const AUTH_DEBUG =
   typeof process !== 'undefined' &&
@@ -45,7 +45,7 @@ export type User = {
  * Invalidate stored API key and redirect to login. Use for logout buttons.
  */
 export function logout(): void {
-  clearStoredApiKey()
+  clearStoredApiKey(); clearStoredUserId()
   window.location.href = '/login'
 }
 

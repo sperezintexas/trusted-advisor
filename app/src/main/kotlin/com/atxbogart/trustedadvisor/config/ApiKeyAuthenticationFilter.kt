@@ -10,7 +10,7 @@ import org.springframework.web.filter.OncePerRequestFilter
 
 /**
  * Authenticates requests that send the shared API key via X-API-Key header or Authorization: Bearer.
- * If the key matches app.auth-secret, sets an ApiKeyPrincipal in the security context.
+ * If the key matches app.auth-secret, sets an ApiKeyPrincipal in the security context with userId from X-User-Id header.
  * When AUTH_SECRET is blank (dev), any non-empty key is accepted so login works without .env.
  */
 class ApiKeyAuthenticationFilter(
@@ -38,7 +38,8 @@ class ApiKeyAuthenticationFilter(
                 else -> key == secret
             }
             if (matches) {
-                val principal = ApiKeyPrincipal()
+                val userId = request.getHeader("X-User-Id")?.trim() ?: "anonymous"
+                val principal = ApiKeyPrincipal(userId)
                 val auth = UsernamePasswordAuthenticationToken(principal, null, emptyList())
                 SecurityContextHolder.getContext().authentication = auth
             }
