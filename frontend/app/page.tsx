@@ -2,14 +2,25 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getStoredApiKey } from '@/lib/api'
+import { fetchSession } from '@/lib/auth'
 
 export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    const key = getStoredApiKey()
-    router.replace(key ? '/chat' : '/login')
+    let cancelled = false
+    fetchSession()
+      .then((user) => {
+        if (cancelled) return
+        router.replace(user ? '/chat' : '/login')
+      })
+      .catch(() => {
+        if (cancelled) return
+        router.replace('/login')
+      })
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
   return (

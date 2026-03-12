@@ -1,5 +1,6 @@
 package com.atxbogart.trustedadvisor.controller
 
+import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import com.atxbogart.trustedadvisor.model.ChatConfig
 import com.atxbogart.trustedadvisor.model.ChatConfigUpdate
 import com.atxbogart.trustedadvisor.model.ChatMessage
@@ -9,9 +10,9 @@ import com.atxbogart.trustedadvisor.service.ChatConfigService
 import com.atxbogart.trustedadvisor.service.ChatService
 import com.atxbogart.trustedadvisor.service.GrokTestResult
 import com.atxbogart.trustedadvisor.service.GrokService
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
-import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
@@ -21,7 +22,8 @@ import org.springframework.web.bind.annotation.*
 class ChatController(
     private val chatService: ChatService,
     private val chatConfigService: ChatConfigService,
-    private val grokService: GrokService
+    private val grokService: GrokService,
+    @Value("\${app.skip-auth:false}") private val skipAuth: Boolean
 ) {
 
     @PostMapping
@@ -29,14 +31,14 @@ class ChatController(
         @RequestBody request: ChatRequest,
         @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<ChatResponse> {
-        val userId = principal?.userId ?: return ResponseEntity.status(401).build()
+        val userId = principal?.userId ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
         val scopedRequest = request.copy(userId = userId)
         return ResponseEntity.ok(chatService.sendMessage(scopedRequest))
     }
 
     @GetMapping("/history")
     fun history(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<List<ChatMessage>> {
-        val userId = principal?.userId ?: return ResponseEntity.status(401).build()
+        val userId = principal?.userId ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
         return try {
             ResponseEntity.ok(chatService.getHistory(userId))
         } catch (e: DataAccessException) {

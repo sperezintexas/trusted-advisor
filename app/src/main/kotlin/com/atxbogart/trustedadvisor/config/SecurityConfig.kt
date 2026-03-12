@@ -20,36 +20,49 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
-    @Value("\${app.auth-secret:}") private val authSecret: String
+    @Value("\${app.auth-secret:}") private val authSecret: String,
+    @Value("\${app.skip-auth:false}") private val skipAuth: Boolean
 ) {
 
     @Bean
     @Order(1)
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
-        val apiKeyFilter = ApiKeyAuthenticationFilter(authSecret)
         http
             .cors { it.configurationSource(corsConfigurationSource()) }
             .csrf { it.disable() }
-            .addFilterBefore(apiKeyFilter, AuthorizationFilter::class.java)
-            .exceptionHandling { e ->
-                e.defaultAuthenticationEntryPointFor(
-                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
-                    AntPathRequestMatcher.antMatcher("/api/**")
-                )
-            }
-            .authorizeHttpRequests { auth ->
-                auth
-                    .requestMatchers("/", "/health", "/error").permitAll()
-                    .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                    .requestMatchers("/api/chat/config/test").permitAll()
-                    .requestMatchers("/api/debug/auth").permitAll()
-                    .requestMatchers("/api/logout").permitAll()
-                    .requestMatchers("/api/**").authenticated()
-                    .anyRequest().authenticated()
-            }
             .sessionManagement { session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             }
+
+        if (skipAuth) {
+            http.authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers("/", "/health", "/error").permitAll()
+                    .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+                    .requestMatchers("/api/**").permitAll()
+                    .anyRequest().permitAll()
+            }
+        } else {
+            val apiKeyFilter = ApiKeyAuthenticationFilter(authSecret)
+            http
+                .addFilterBefore(apiKeyFilter, AuthorizationFilter::class.java)
+                .exceptionHandling { e ->
+                    e.defaultAuthenticationEntryPointFor(
+                        HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                        AntPathRequestMatcher.antMatcher("/api/**")
+                    )
+                }
+                .authorizeHttpRequests { auth ->
+                    auth
+                        .requestMatchers("/", "/health", "/error").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+                        .requestMatchers("/api/chat/config/test").permitAll()
+                        .requestMatchers("/api/debug/auth").permitAll()
+                        .requestMatchers("/api/logout").permitAll()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().authenticated()
+                }
+        }
         return http.build()
     }
 

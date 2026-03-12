@@ -1,5 +1,6 @@
 package com.atxbogart.trustedadvisor.controller
 
+import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import com.atxbogart.trustedadvisor.model.CheckAnswerResult
 import com.atxbogart.trustedadvisor.model.ChoiceLetter
 import com.atxbogart.trustedadvisor.model.CoachAnswerRequest
@@ -12,19 +13,22 @@ import com.atxbogart.trustedadvisor.model.PracticeSessionResponse
 import com.atxbogart.trustedadvisor.model.ScoreRequest
 import com.atxbogart.trustedadvisor.model.ScoreResponse
 import com.atxbogart.trustedadvisor.service.CoachService
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
-import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/coach")
 @CrossOrigin(origins = ["http://localhost:3000"])
-class CoachController(private val coachService: CoachService) {
+class CoachController(
+    private val coachService: CoachService,
+    @Value("\${app.skip-auth:false}") private val skipAuth: Boolean
+) {
 
     private fun userIdOrUnauthorized(principal: ApiKeyPrincipal?): String? =
-        principal?.userId
+        principal?.userId ?: if (skipAuth) "dev-user" else null
 
     @GetMapping("/exams")
     fun getExams(): ResponseEntity<List<CoachExam>> =

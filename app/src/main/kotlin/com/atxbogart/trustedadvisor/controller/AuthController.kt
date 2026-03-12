@@ -14,7 +14,8 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api")
 class AuthController(
-    @Value("\${app.auth-debug:false}") private val authDebug: Boolean
+    @Value("\${app.auth-debug:false}") private val authDebug: Boolean,
+    @Value("\${app.skip-auth:false}") private val skipAuth: Boolean
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -22,10 +23,11 @@ class AuthController(
     @GetMapping("/me")
     fun me(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<MeResponse?> {
         if (authDebug) log.info("[auth] GET /api/me: principal present={}", principal != null)
-        if (principal == null) return ResponseEntity.status(401).build()
+        if (principal == null && !skipAuth) return ResponseEntity.status(401).build()
+        val effectiveUserId = principal?.userId ?: "dev-user"
         return ResponseEntity.ok(
             MeResponse(
-                id = principal.userId,
+                id = effectiveUserId,
                 username = "api",
                 displayName = null,
                 profileImageUrl = null

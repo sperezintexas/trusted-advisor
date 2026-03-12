@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { apiUrl, getStoredApiKey, clearStoredApiKey, clearStoredUserId, defaultFetchOptions } from './api'
+import { apiUrl, clearStoredApiKey, clearStoredUserId, defaultFetchOptions } from './api'
 
 const AUTH_DEBUG =
   typeof process !== 'undefined' &&
@@ -50,11 +50,10 @@ export function logout(): void {
 }
 
 /**
- * Fetch current user from backend using stored API key. Returns null if unauthenticated or no key.
+ * Fetch current user from backend. Returns null if unauthenticated.
+ * Note: when backend auth is disabled (APP_SKIP_AUTH=true), /me returns a synthetic user.
  */
 export async function fetchSession(): Promise<User | null> {
-  const key = getStoredApiKey()
-  if (!key) return null
   const res = await fetch(apiUrl('/me'), defaultFetchOptions())
   if (!res.ok) return null
   const data = (await res.json()) as User
