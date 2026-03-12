@@ -1,0 +1,12 @@
+{
+  "name": "trusted-advisor-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "seed-admins": "node seed-admin-users.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "mongodb": "^6.3.0"
+  }
+}
