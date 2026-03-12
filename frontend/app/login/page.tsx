@@ -1,19 +1,11 @@
 'use client'
 
 import AppHeader from '../components/AppHeader'
-import {
-  isAuthDebugEnabled,
-  authDebugLog,
-  checkSessionStatus,
-} from '@/lib/auth'
-import { apiUrl, setStoredApiKey, setStoredUserId, clearStoredApiKey, clearStoredUserId, defaultFetchOptions } from '@/lib/api'
-import { useEffect, useState } from 'react'
+import { isAuthDebugEnabled, authDebugLog, checkSessionStatus } from '@/lib/auth'
+import { apiUrl, defaultFetchOptions } from '@/lib/api'
+import { useEffect } from 'react'
 
 export default function LoginPage() {
-  const [apiKey, setApiKey] = useState('')
-  const [xid, setXid] = useState('atxbogart')
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
   const debugOn = isAuthDebugEnabled()
 
   useEffect(() => {
@@ -33,38 +25,12 @@ export default function LoginPage() {
       .catch(() => authDebugLog('Backend /api/debug/auth', 'request failed'))
   }, [debugOn])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    const key = apiKey.trim()
-    if (!key) {
-      setError('Enter your password.')
-      return
-    }
-    const userid = xid.trim()
-    if (!userid) {
-      setError('Enter your X ID (e.g. atxbogart).')
-      return
-    }
-    setSubmitting(true)
-    try {
-      setStoredApiKey(key)
-      setStoredUserId(userid)
-      const res = await fetch(apiUrl('/me'), defaultFetchOptions())
-      if (!res.ok) {
-        clearStoredApiKey()
-        clearStoredUserId()
-        setError(res.status === 401 ? 'Wrong password.' : 'Something went wrong. Try again.')
-        return
-      }
-      window.location.href = '/chat'
-    } catch {
-      clearStoredApiKey()
-      clearStoredUserId()
-      setError('Something went wrong. Try again.')
-    } finally {
-      setSubmitting(false)
-    }
+  function loginWithGoogle() {
+    window.location.href = `${apiUrl('/oauth2/authorization/google')}`.replace('/api/api', '/api')
+  }
+
+  function loginWithGithub() {
+    window.location.href = `${apiUrl('/oauth2/authorization/github')}`.replace('/api/api', '/api')
   }
 
   return (
@@ -76,47 +42,25 @@ export default function LoginPage() {
             Sign in
           </h1>
           <p className="mt-2 text-sm text-[var(--docs-muted)]">
-            Enter your X ID (e.g. atxbogart) and password to continue.
+            Sign in with your Google or GitHub account. Only emails pre-approved
+            in the system can access Trusted Advisor.
           </p>
-          <form onSubmit={handleSubmit} className="mt-6">
-            <label htmlFor="xid" className="block text-sm font-medium text-[var(--docs-text)]">
-              X ID
-            </label>
-            <input
-              id="xid"
-              type="text"
-              value={xid}
-              onChange={(e) => setXid(e.target.value)}
-              placeholder="atxbogart"
-              className="mb-3 w-full rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] placeholder:text-[var(--docs-muted)] focus:border-[var(--docs-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--docs-accent)]"
-              disabled={submitting}
-            />
-            <label htmlFor="password" className="sr-only">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Password"
-              autoComplete="current-password"
-              className="w-full rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] placeholder:text-[var(--docs-muted)] focus:border-[var(--docs-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--docs-accent)]"
-              disabled={submitting}
-            />
-            {error && (
-              <p className="mt-2 text-sm text-red-600" role="alert">
-                {error}
-              </p>
-            )}
+          <div className="mt-6 space-y-3">
             <button
-              type="submit"
-              disabled={submitting}
-              className="mt-4 w-full rounded-lg bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2 disabled:opacity-50"
+              type="button"
+              onClick={loginWithGoogle}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2"
             >
-              {submitting ? 'Checking…' : 'Sign in'}
+              Continue with Google
             </button>
-          </form>
+            <button
+              type="button"
+              onClick={loginWithGithub}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--docs-border)] bg-white px-4 py-3 text-sm font-medium text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2"
+            >
+              Continue with GitHub
+            </button>
+          </div>
           {debugOn && (
             <p className="mt-4 text-center text-xs text-[var(--docs-muted)]">
               Auth debug on. Open Console (F12) for [auth] logs.

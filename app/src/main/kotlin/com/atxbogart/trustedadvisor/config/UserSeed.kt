@@ -20,6 +20,7 @@ class UserSeed(private val userRepository: UserRepository) {
             if (userRepository.findByUsername("atxbogart") != null) return
             userRepository.save(
                 User(
+                    email = "atxbogart@example.com",
                     username = "atxbogart",
                     displayName = "atxbogart",
                     xId = null

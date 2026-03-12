@@ -14,6 +14,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken
+import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -31,14 +34,18 @@ class ChatController(
         @RequestBody request: ChatRequest,
         @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<ChatResponse> {
-        val userId = principal?.userId ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
+        val userId = principal?.userId
+            ?: currentEmailFromOAuth2()
+            ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
         val scopedRequest = request.copy(userId = userId)
         return ResponseEntity.ok(chatService.sendMessage(scopedRequest))
     }
 
     @GetMapping("/history")
     fun history(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<List<ChatMessage>> {
-        val userId = principal?.userId ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
+        val userId = principal?.userId
+            ?: currentEmailFromOAuth2()
+            ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
         return try {
             ResponseEntity.ok(chatService.getHistory(userId))
         } catch (e: DataAccessException) {
@@ -57,4 +64,12 @@ class ChatController(
 
     @GetMapping("/config/test")
     fun testGrokConnection(): GrokTestResult = grokService.testConnection()
+
+    private fun currentEmailFromOAuth2(): String? {
+        val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
+        val principal = auth.principal as? OAuth2User ?: return null
+        val attrs = principal.attributes
+        return (attrs["email"] as? String)
+            ?: (attrs["login"] as? String)?.let { "$it@github.local" }
+    }
 }

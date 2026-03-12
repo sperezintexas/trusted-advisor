@@ -17,6 +17,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken
+import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -28,7 +31,9 @@ class CoachController(
 ) {
 
     private fun userIdOrUnauthorized(principal: ApiKeyPrincipal?): String? =
-        principal?.userId ?: if (skipAuth) "dev-user" else null
+        principal?.userId
+            ?: currentEmailFromOAuth2()
+            ?: if (skipAuth) "dev-user" else null
 
     @GetMapping("/exams")
     fun getExams(): ResponseEntity<List<CoachExam>> =
@@ -165,4 +170,12 @@ class CoachController(
     }
 
     data class RecordAnswerResponse(val correct: Boolean)
+
+    private fun currentEmailFromOAuth2(): String? {
+        val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
+        val principal = auth.principal as? OAuth2User ?: return null
+        val attrs = principal.attributes
+        return (attrs["email"] as? String)
+            ?: (attrs["login"] as? String)?.let { "$it@github.local" }
+    }
 }

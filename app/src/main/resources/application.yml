@@ -9,6 +9,23 @@ spring:
       # URI from .env: MONGODB_URI or MONGODB_URI_B64 (decoded in App.kt). Database from MONGODB_DATABASE only.
       uri: ${MONGODB_URI:mongodb://localhost:27017/trusted-advisor}
       database: ${MONGODB_DATABASE:trusted-advisor}
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            scope:
+              - openid
+              - email
+              - profile
+          github:
+            client-id: ${GITHUB_CLIENT_ID:}
+            client-secret: ${GITHUB_CLIENT_SECRET:}
+            scope:
+              - read:user
+              - user:email
 
 management:
   endpoints:

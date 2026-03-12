@@ -41,6 +41,16 @@ export type User = {
   profileImageUrl: string | null
 }
 
+export type AuthSession = {
+  allowed: boolean
+  needsRegistration: boolean
+  user: {
+    email: string
+    username: string
+    displayName: string | null
+  } | null
+}
+
 /**
  * Invalidate stored API key and redirect to login. Use for logout buttons.
  */
@@ -58,6 +68,17 @@ export async function fetchSession(): Promise<User | null> {
   if (!res.ok) return null
   const data = (await res.json()) as User
   return data
+}
+
+export async function fetchAuthSession(): Promise<AuthSession | null> {
+  try {
+    const res = await fetch(apiUrl('/auth/session'), defaultFetchOptions())
+    if (!res.ok) return null
+    const data = (await res.json()) as AuthSession
+    return data
+  } catch {
+    return null
+  }
 }
 
 /**

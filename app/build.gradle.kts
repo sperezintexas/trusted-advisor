@@ -22,6 +22,7 @@ dependencies {
     implementation(libs.springboot3.dotenv)
     implementation(libs.spring.boot.starter.web)
     implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
     implementation(libs.kotlin.reflect)
     implementation(libs.jackson.module.kotlin)
     implementation(libs.spring.boot.starter.data.mongodb)

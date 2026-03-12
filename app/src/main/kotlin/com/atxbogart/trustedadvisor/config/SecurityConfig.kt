@@ -4,17 +4,17 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
+import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.intercept.AuthorizationFilter
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
-import org.springframework.security.config.http.SessionCreationPolicy
-import org.springframework.http.HttpMethod
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 
 @Configuration
@@ -30,6 +30,10 @@ class SecurityConfig(
         http
             .cors { it.configurationSource(corsConfigurationSource()) }
             .csrf { it.disable() }
+            // OAuth2 login for browser-based auth; keeps API stateless.
+            .oauth2Login { oauth2 ->
+                oauth2.loginPage("/login")
+            }
             .sessionManagement { session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             }
@@ -40,6 +44,7 @@ class SecurityConfig(
                     .requestMatchers("/", "/health", "/error").permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                     .requestMatchers("/api/**").permitAll()
+                    .requestMatchers("/login", "/oauth2/**").permitAll()
                     .anyRequest().permitAll()
             }
         } else {
@@ -59,6 +64,7 @@ class SecurityConfig(
                         .requestMatchers("/api/chat/config/test").permitAll()
                         .requestMatchers("/api/debug/auth").permitAll()
                         .requestMatchers("/api/logout").permitAll()
+                        .requestMatchers("/login", "/oauth2/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 }

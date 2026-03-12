@@ -10,11 +10,22 @@ import java.time.ZoneOffset
 data class User(
     @Id
     val id: String? = null,
-    @Indexed(unique = true)
+    /**
+     * Primary identifier for end-users. Pre-provisioned emails represent allowed users.
+     * Nullable for legacy/seeded users; new users should always set email.
+     */
+    @Indexed(unique = true, sparse = true)
+    val email: String? = null,
+    /** Optional X (Twitter) user id for linkage. */
+    @Indexed(unique = true, sparse = true)
     val xId: String? = null,
     val username: String,
     val displayName: String? = null,
     val profileImageUrl: String? = null,
+    /** True once the user has completed in-app registration for the first time. */
+    val registered: Boolean = false,
     val createdAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
-    val updatedAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)
+    val updatedAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
+    val firstLoginAt: LocalDateTime? = null,
+    val lastLoginAt: LocalDateTime? = null
 )
