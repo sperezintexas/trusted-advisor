@@ -44,11 +44,24 @@ export type User = {
 export type AuthSession = {
   allowed: boolean
   needsRegistration: boolean
+  accessRequestStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null
   user: {
     email: string
     username: string
     displayName: string | null
   } | null
+}
+
+export type AccessRequestResponse = {
+  success: boolean
+  message: string
+  status: string | null
+}
+
+export type AccessRequestStatusResponse = {
+  hasRequest: boolean
+  status: string | null
+  createdAt: string | null
 }
 
 /**
@@ -76,6 +89,37 @@ export async function fetchAuthSession(): Promise<AuthSession | null> {
     if (!res.ok) return null
     const data = (await res.json()) as AuthSession
     return data
+  } catch {
+    return null
+  }
+}
+
+export async function submitAccessRequest(
+  displayName?: string,
+  reason?: string
+): Promise<AccessRequestResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/auth/request-access'), {
+      ...defaultFetchOptions(),
+      method: 'POST',
+      headers: {
+        ...defaultFetchOptions().headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ displayName, reason }),
+    })
+    if (!res.ok) return null
+    return (await res.json()) as AccessRequestResponse
+  } catch {
+    return null
+  }
+}
+
+export async function fetchAccessRequestStatus(): Promise<AccessRequestStatusResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/auth/access-request/status'), defaultFetchOptions())
+    if (!res.ok) return null
+    return (await res.json()) as AccessRequestStatusResponse
   } catch {
     return null
   }
