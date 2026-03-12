@@ -1,8 +1,11 @@
 package com.atxbogart.trustedadvisor.controller
 
 import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
+import com.atxbogart.trustedadvisor.model.AccessRequestStatus
 import com.atxbogart.trustedadvisor.model.User
 import com.atxbogart.trustedadvisor.repository.UserRepository
+import com.atxbogart.trustedadvisor.service.AccessRequestResult
+import com.atxbogart.trustedadvisor.service.AccessRequestService
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -20,7 +23,8 @@ import java.time.ZoneOffset
 class AuthController(
     @Value("\${app.auth-debug:false}") private val authDebug: Boolean,
     @Value("\${app.skip-auth:false}") private val skipAuth: Boolean,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val accessRequestService: AccessRequestService
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -51,6 +55,7 @@ class AuthController(
      * Current auth session derived from principal + users collection.
      * - When skip-auth is enabled, always returns allowed + needsRegistration=false for a synthetic dev user.
      * - When auth is enforced, looks up the user by principal userId (treated as email) in Mongo.
+     * - If user is not found, checks for pending access request.
      */
     @GetMapping("/auth/session")
     fun authSession(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<AuthSessionResponse> {
@@ -59,6 +64,7 @@ class AuthController(
                 AuthSessionResponse(
                     allowed = true,
                     needsRegistration = false,
+                    accessRequestStatus = null,
                     user = AuthUserView(
                         email = "dev-user@example.com",
                         username = "dev-user",
@@ -69,18 +75,27 @@ class AuthController(
         }
         val email = principal?.userId ?: currentEmailFromOAuth2() ?: return ResponseEntity.status(401).build()
         val user = userRepository.findByEmail(email)
-            ?: return ResponseEntity.ok(
+        if (user == null) {
+            val accessRequest = accessRequestService.getRequestByEmail(email)
+            return ResponseEntity.ok(
                 AuthSessionResponse(
                     allowed = false,
                     needsRegistration = false,
-                    user = null
+                    accessRequestStatus = accessRequest?.status?.name,
+                    user = AuthUserView(
+                        email = email,
+                        username = email.substringBefore("@"),
+                        displayName = null
+                    )
                 )
             )
+        }
         val needsRegistration = !user.registered
         return ResponseEntity.ok(
             AuthSessionResponse(
                 allowed = true,
                 needsRegistration = needsRegistration,
+                accessRequestStatus = null,
                 user = AuthUserView(
                     email = user.email ?: email,
                     username = user.username,
@@ -90,17 +105,111 @@ class AuthController(
         )
     }
 
+    @PostMapping("/auth/request-access")
+    fun requestAccess(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @RequestBody body: AccessRequestBody
+    ): ResponseEntity<AccessRequestResponse> {
+        if (skipAuth) {
+            return ResponseEntity.ok(
+                AccessRequestResponse(
+                    success = true,
+                    message = "Dev mode: access request simulated",
+                    status = "PENDING"
+                )
+            )
+        }
+        val email = principal?.userId ?: currentEmailFromOAuth2() ?: return ResponseEntity.status(401).build()
+        val oauthInfo = getOAuth2Info()
+
+        return when (val result = accessRequestService.submitRequest(
+            email = email,
+            displayName = body.displayName ?: oauthInfo?.displayName,
+            reason = body.reason,
+            oauthProvider = oauthInfo?.provider,
+            profileImageUrl = oauthInfo?.profileImageUrl
+        )) {
+            is AccessRequestResult.Success -> ResponseEntity.ok(
+                AccessRequestResponse(
+                    success = true,
+                    message = "Access request submitted successfully",
+                    status = result.request.status.name
+                )
+            )
+            is AccessRequestResult.AlreadyExists -> ResponseEntity.ok(
+                AccessRequestResponse(
+                    success = false,
+                    message = "Access request already exists",
+                    status = result.request.status.name
+                )
+            )
+            is AccessRequestResult.AlreadyApproved -> ResponseEntity.ok(
+                AccessRequestResponse(
+                    success = false,
+                    message = "User already has access",
+                    status = "APPROVED"
+                )
+            )
+            is AccessRequestResult.Error -> ResponseEntity.badRequest().body(
+                AccessRequestResponse(
+                    success = false,
+                    message = result.message,
+                    status = null
+                )
+            )
+            is AccessRequestResult.NotFound -> ResponseEntity.badRequest().body(
+                AccessRequestResponse(
+                    success = false,
+                    message = "Request not found",
+                    status = null
+                )
+            )
+        }
+    }
+
+    @GetMapping("/auth/access-request/status")
+    fun accessRequestStatus(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<AccessRequestStatusResponse> {
+        if (skipAuth) {
+            return ResponseEntity.ok(
+                AccessRequestStatusResponse(
+                    hasRequest = false,
+                    status = null,
+                    createdAt = null
+                )
+            )
+        }
+        val email = principal?.userId ?: currentEmailFromOAuth2() ?: return ResponseEntity.status(401).build()
+        val request = accessRequestService.getRequestByEmail(email)
+        return ResponseEntity.ok(
+            AccessRequestStatusResponse(
+                hasRequest = request != null,
+                status = request?.status?.name,
+                createdAt = request?.createdAt?.toString()
+            )
+        )
+    }
+
+    private fun getOAuth2Info(): OAuth2Info? {
+        val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
+        val principal = auth.principal as? OAuth2User ?: return null
+        val attrs = principal.attributes
+        val provider = auth.authorizedClientRegistrationId
+        val displayName = (attrs["name"] as? String) ?: (attrs["login"] as? String)
+        val profileImageUrl = (attrs["picture"] as? String) ?: (attrs["avatar_url"] as? String)
+        return OAuth2Info(provider, displayName, profileImageUrl)
+    }
+
     @PostMapping("/auth/register")
     fun register(
         @AuthenticationPrincipal principal: ApiKeyPrincipal?,
         @RequestBody body: RegistrationRequest
     ): ResponseEntity<AuthSessionResponse> {
         if (skipAuth) {
-            // In dev mode just echo a synthetic user.
             return ResponseEntity.ok(
                 AuthSessionResponse(
                     allowed = true,
                     needsRegistration = false,
+                    accessRequestStatus = null,
                     user = AuthUserView(
                         email = "dev-user@example.com",
                         username = body.username.ifBlank { "dev-user" },
@@ -127,6 +236,7 @@ class AuthController(
             AuthSessionResponse(
                 allowed = true,
                 needsRegistration = false,
+                accessRequestStatus = null,
                 user = AuthUserView(
                     email = saved.email ?: email,
                     username = saved.username,
@@ -161,10 +271,34 @@ data class AuthUserView(
 data class AuthSessionResponse(
     val allowed: Boolean,
     val needsRegistration: Boolean,
+    val accessRequestStatus: String?,
     val user: AuthUserView?
 )
 
 data class RegistrationRequest(
     val username: String = "",
     val displayName: String = ""
+)
+
+data class AccessRequestBody(
+    val displayName: String? = null,
+    val reason: String? = null
+)
+
+data class AccessRequestResponse(
+    val success: Boolean,
+    val message: String,
+    val status: String?
+)
+
+data class AccessRequestStatusResponse(
+    val hasRequest: Boolean,
+    val status: String?,
+    val createdAt: String?
+)
+
+data class OAuth2Info(
+    val provider: String?,
+    val displayName: String?,
+    val profileImageUrl: String?
 )
