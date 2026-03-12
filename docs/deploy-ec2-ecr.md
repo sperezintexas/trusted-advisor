@@ -2,7 +2,7 @@
 
 CI builds and pushes Docker images to AWS ECR on every push to `main`. You can either run the app on **EC2** (this doc) or use **App Runner** (see below).
 
-**App Runner:** To deploy with AWS App Runner like your other app, set GitHub variables `ENABLE_AWS_DEPLOY=true`, `APP_RUNNER_SERVICE_ARN_BACKEND`, and `APP_RUNNER_SERVICE_ARN_FRONTEND`. The workflow `.github/workflows/deploy-aws-apprunner.yml` runs after CI and triggers App Runner deployment. See `docs/aws-app-runner-requirements.md` and `docs/aws-apprunner-clean-deploy.md`.
+**App Runner:** To deploy with AWS App Runner like your other app, do the **one-time CLI setup** in **`docs/deploy-apprunner-cli.md`** (ECR, IAM role, create both services, push env vars). Then set GitHub variables `ENABLE_AWS_DEPLOY=true`, `APP_RUNNER_SERVICE_ARN_BACKEND`, and `APP_RUNNER_SERVICE_ARN_FRONTEND`. The workflow `.github/workflows/deploy-aws-apprunner.yml` runs after CI and triggers App Runner deployment.
 
 ---
 

@@ -19,3 +19,7 @@ frontend/.env.*
 
 # Logs
 frontend/npm-debug.log*
+
+# App Runner generated config (contains env/secrets)
+apprunner-backend-input.json
+apprunner-frontend-input.json
