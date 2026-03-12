@@ -41,7 +41,7 @@ The workflow [../.github/workflows/deploy-aws-apprunner.yml](../.github/workflow
 
 ## One-time AWS setup
 
-1. **IAM:** User with ECR (create repo, push image) and App Runner (`StartDeployment`, `DescribeService`, `ListOperations`) permissions. See [aws-app-runner-requirements.md](aws-app-runner-requirements.md) for a policy example (replace `myinvestments` with `trusted-advisor-backend` / `trusted-advisor-frontend` in the ECR resource ARNs, or use `*` for the repo name pattern).
+1. **IAM:** User with ECR (create repo, push image) and App Runner (`StartDeployment`, `DescribeService`, `ListOperations`) permissions. See [aws-app-runner-requirements.md](aws-app-runner-requirements.md) for a policy example (ECR resource ARNs use `trusted-advisor-backend` and `trusted-advisor-frontend`).
 
 2. **App Runner services:** Create one or two services in the AWS console (or CLI):
    - **Backend:** Source = ECR `trusted-advisor-backend`, tag `latest`; port **8080**; health check path `/health`; set env (e.g. `MONGODB_URI`, `XAI_API_KEY`). Deployment trigger = Manual.

@@ -27,7 +27,7 @@ The sections below describe validators for collections that may be used by other
 
 1. Set environment variables:
    - `MONGODB_URI` (or `MONGODB_URI_B64` for base64-encoded URI)
-   - `MONGODB_DB` (default: `myinvestments`)
+   - `MONGODB_DB` (default: `trusted-advisor`)
 2. Run:
    ```bash
    npx tsx scripts/mongo-validators.ts

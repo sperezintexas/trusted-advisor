@@ -14,7 +14,7 @@
 - **Secrets:** One `.env` at the **repo root** is used by both backend and frontend. Copy from `.env.example`; do not commit `.env`.
   - **Backend:** Spring Boot loads it via spring-dotenv (working dir is repo root when running `./gradlew bootRun`).
   - **Frontend:** Next.js loads it via `dotenv` in `next.config.mjs` (path: `../.env`). Set `MONGODB_URI` (or `MONGODB_URI_B64`), `XAI_API_KEY`; optional `BACKEND_URL` for API proxy.
-  - **Auth:** Set **AUTH_SECRET** (shared secret; user enters it on the login page). **Debug:** set `AUTH_DEBUG=true` (backend) and/or `NEXT_PUBLIC_AUTH_DEBUG=true` (frontend), restart; logs `[auth]` to console (local only). (Legacy: **X / Twitter OAuth2** — Set `X_CLIENT_ID`, `X_CLIENT_SECRET` (create an app at [developer.x.com](https://developer.x.com/)). You can use the **same X app** as fintech-app: in the portal add a **second** callback URL for this app: `http://localhost:8080/login/oauth2/code/x` (fintech uses `http://localhost:3000/api/auth/callback/twitter`; trusted-advisor uses the backend on 8080). Callback in the portal must match exactly. **Debug:** set `AUTH_DEBUG=true` (backend) and/or `NEXT_PUBLIC_AUTH_DEBUG=true` (frontend), restart; logs `[auth]` to console (local only). If you get 400, try 127.0.0.1 (see “X OAuth 2.0 login — 400” below).
+  - **Auth:** Set **AUTH_SECRET** (shared secret; user enters it on the login page). **Debug:** set `AUTH_DEBUG=true` (backend) and/or `NEXT_PUBLIC_AUTH_DEBUG=true` (frontend), restart; logs `[auth]` to console (local only). (Legacy: **X / Twitter OAuth2** — Set `X_CLIENT_ID`, `X_CLIENT_SECRET` (create an app at [developer.x.com](https://developer.x.com/)). In the portal add callback URL for this app: `http://localhost:8080/login/oauth2/code/x`. Callback in the portal must match exactly. **Debug:** set `AUTH_DEBUG=true` (backend) and/or `NEXT_PUBLIC_AUTH_DEBUG=true` (frontend), restart; logs `[auth]` to console (local only). If you get 400, try 127.0.0.1 (see “X OAuth 2.0 login — 400” below).
   - **X posting (optional):** For `npm run test:x-post` (verify credentials + post "Hello world"), set `X_CONSUMER_KEY`, `X_CONSUMER_SECRET` (or `X_CONSUMER_SECRET_KEY`), `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` from developer.x.com → Keys and tokens.
 
 ## Running the App (local with .env)
@@ -90,7 +90,7 @@ On push/PR to `main`/`master`, [.github/workflows/ci.yml](.github/workflows/ci.y
 
 ## (Removed) X OAuth 2.0 — kept for reference only
 
-**Same X app as fintech:** Add a **second** callback in the X portal: `http://localhost:8080/login/oauth2/code/x` (fintech keeps `http://localhost:3000/api/auth/callback/twitter`). Leave `OAUTH2_REDIRECT_URI` unset to use localhost like fintech. Debug: `AUTH_DEBUG` + `NEXT_PUBLIC_AUTH_DEBUG` → `[auth]` in console.
+**Same X app as another project:** Add a **second** callback in the X portal: `http://localhost:8080/login/oauth2/code/x`. Leave `OAUTH2_REDIRECT_URI` unset to use localhost. Debug: `AUTH_DEBUG` + `NEXT_PUBLIC_AUTH_DEBUG` → `[auth]` in console.
 
 If you see **`[authorization_request_not_found]`** after X redirects back to the app: you started the flow from a direct Twitter URL (e.g. from `node scripts/test-env.mjs`) instead of from the app. Always start by opening the app and clicking **Sign in with X** so the backend creates the session; the script URL is only for checking `redirect_uri` / portal config.
 
@@ -125,7 +125,7 @@ If you still see **400** on `twitter.com/i/api/2/oauth2/authorize` or `api.twitt
 2. **Portal checklist** ([developer.x.com](https://developer.x.com/) → your app):
    - **Projects & Apps:** Use an app that is **inside a Project** (not a standalone legacy app).
    - **User authentication:** Click **Set up** or **Edit**. Enable **OAuth 2.0**; set **Type of App** to one that supports “Log in with X” (e.g. Web App).
-   - **Callback URL:** List must include **both** `http://localhost:3000/api/auth/callback/twitter` (fintech) and `http://localhost:8080/login/oauth2/code/x` (this app). Or use 127.0.0.1 if localhost gives 400. No trailing slashes.
+   - **Callback URL:** List must include `http://localhost:8080/login/oauth2/code/x` for this app (and any other callback URLs for other apps using the same X app). Or use 127.0.0.1 if localhost gives 400. No trailing slashes.
    - **App permissions:** At least **Read**.
    - **Development mode:** If the app is in Development, add your X account under **Allowlist** (User authentication).
    - **Keys:** Use the **OAuth 2.0 Client ID** and **Client Secret** from **User authentication** → Keys and tokens (not the older Consumer Keys).

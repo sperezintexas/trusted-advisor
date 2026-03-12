@@ -10,7 +10,7 @@ Attach a policy that allows **ECR** (build/push) and **App Runner** (deploy + de
 
 **Option A — inline policy (recommended)**
 
-IAM → Users → **myinvestments-deploy** (or your user) → Add permissions → Create inline policy → JSON:
+IAM → Users → **trusted-advisor-deploy** (or your user) → Add permissions → Create inline policy → JSON:
 
 ```json
 {
@@ -38,7 +38,10 @@ IAM → Users → **myinvestments-deploy** (or your user) → Add permissions �
         "ecr:UploadLayerPart",
         "ecr:CompleteLayerUpload"
       ],
-      "Resource": "arn:aws:ecr:*:YOUR_ACCOUNT_ID:repository/myinvestments"
+      "Resource": [
+        "arn:aws:ecr:*:YOUR_ACCOUNT_ID:repository/trusted-advisor-backend",
+        "arn:aws:ecr:*:YOUR_ACCOUNT_ID:repository/trusted-advisor-frontend"
+      ]
     },
     {
       "Sid": "AppRunner",
@@ -55,7 +58,7 @@ IAM → Users → **myinvestments-deploy** (or your user) → Add permissions �
 }
 ```
 
-Replace `YOUR_ACCOUNT_ID` with your AWS account ID (e.g. `205562145226`).
+Replace `YOUR_ACCOUNT_ID` with your AWS account ID (run `aws sts get-caller-identity --query Account --output text`).
 `GetAuthorizationToken` must be `Resource: "*"`. The App Runner block uses `Resource: "*"` because `ListServices` does not support resource-level permissions. If you get **AccessDeniedException** on other App Runner actions, ensure the statement includes all required actions (e.g. `UpdateService`, `PauseService`, `ResumeService` if you use them).
 
 **Option B — managed policies**
@@ -67,86 +70,56 @@ Attach:
 
 ---
 
-## 2. One-time: get an image into ECR
+## 2. One-time: get images into ECR
 
-App Runner needs at least one image in ECR before you can create the service.
+App Runner needs at least one image per ECR repo before you can create the services.
 
 **Option A — push from your machine**
 
 ```bash
 # From repo root
-aws ecr create-repository --repository-name myinvestments --region us-east-1
-# Replace 205562145226 with your AWS account ID (see IAM console or: aws sts get-caller-identity --query Account --output text)
-export AWS_ACCOUNT_ID=205562145226
-export AWS_REGION=us-east-1
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-docker build -t myinvestments:latest --build-arg MONGODB_URI=placeholder --build-arg MONGODB_DB=myinvestments .
-docker tag myinvestments:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/myinvestments:latest
-docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/myinvestments:latest
+./scripts/aws-ecr-setup.sh us-east-1
+./scripts/aws-ecr-push-local.sh us-east-1
 ```
 
-Use your own account ID if different (run `aws sts get-caller-identity --query Account --output text`).
+See [deploy-apprunner-cli.md](deploy-apprunner-cli.md) for details.
 
-**Option B — let CI push (without deploying)**
+**Option B — let CI push**
 
-1. In GitHub: set **Secrets** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Do **not** set `ENABLE_AWS_DEPLOY` or `APP_RUNNER_SERVICE_ARN` yet.
-2. Temporarily add a workflow that only builds and pushes to ECR (no App Runner step), run it once, then remove it — **or** use Option A.
+1. In GitHub: set **Secrets** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Push to `main`; CI builds and pushes `trusted-advisor-backend` and `trusted-advisor-frontend` to ECR.
+2. Do **not** set `ENABLE_AWS_DEPLOY` or the App Runner ARN variables until the services are created and RUNNING.
 
-After this, the repo `myinvestments` in ECR must have the `latest` (or a specific) tag.
+After this, ECR repos `trusted-advisor-backend` and `trusted-advisor-frontend` must have the `latest` (or a specific) tag.
 
 ---
 
-## 3. Create the App Runner service (one-time)
+## 3. Create the App Runner services (one-time)
 
-**Console**
+Trusted Advisor has **two** App Runner services: **backend** (port 8080) and **frontend** (port 3000). The canonical CLI-only flow is in [deploy-apprunner-cli.md](deploy-apprunner-cli.md). Summary:
 
-1. **App Runner** → **Create service**.
-2. **Source:** Container registry → **Amazon ECR**.
-3. **Connect to ECR:** use the same account/region. Pick repository **myinvestments**, image tag **latest**.
-4. **Deployment trigger:** “Manual” (CI will run `start-deployment`).
-5. **Service name:** e.g. `myinvestments-prod`.
-6. **Port:** `3000`.
-7. **Health check:** Set **path** to `/api/health/live` (returns 200 immediately; use `/api/health` only if you want full DB/scheduler checks and can afford a longer timeout).
-8. **CPU:** 1 vCPU. **Memory:** 2 GB (or more if needed).
-9. **Environment variables:** Add the same vars as in `.env.prod`:
-   `MONGODB_URI`, `MONGODB_DB`, `AUTH_SECRET`, `NEXTAUTH_URL`, `X_CLIENT_ID`, `X_CLIENT_SECRET`, `XAI_API_KEY`, `WEB_SEARCH_API_KEY`, `CRON_SECRET`, `SLACK_WEBHOOK_URL`.
-   (Or reference Secrets Manager if you used `scripts/aws-secrets-from-env.sh`.)
-10. **Create service.** Wait until status is **Running**.
-11. Copy **Service ARN** and **Service URL** (e.g. `https://xxxxx.us-east-1.awsapprunner.com`).
+**CLI (recommended)**
 
-**If the app logs show "Ready" but the deployment still fails:** Use the liveness path so the check doesn’t wait on MongoDB. Try **TCP health check** so App Runner only checks port 3000 is open: run `aws apprunner update-service --service-arn YOUR_ARN --region us-east-1 --health-check-configuration "Protocol=TCP,Interval=10,Timeout=5,HealthyThreshold=1,UnhealthyThreshold=5"`, then start a new deployment. Once Running, you can switch back to HTTP path `/api/health/live` in Configure → Health check if desired.
+1. **ECR access role:** Run `./scripts/iam-apprunner-ecr-role.sh`, then `export APP_RUNNER_ECR_ACCESS_ROLE=arn:aws:iam::YOUR_ACCOUNT_ID:role/AppRunnerECRAccess`.
+2. **Backend:** `./scripts/create-apprunner-service-backend.sh us-east-1`. Wait until RUNNING. Push env: `./scripts/update-apprunner-env.sh .env.prod <BACKEND_ARN> us-east-1`.
+3. **Frontend:** `./scripts/create-apprunner-service-frontend.sh us-east-1 'https://<BACKEND_APP_RUNNER_URL>'`. Wait until RUNNING. Push env: `./scripts/update-apprunner-env.sh .env.prod <FRONTEND_ARN> us-east-1`.
+4. Set GitHub variables **APP_RUNNER_SERVICE_ARN_BACKEND** and **APP_RUNNER_SERVICE_ARN_FRONTEND** to the respective ARNs.
 
-**CLI (alternative) — one command with all env vars from `.env.prod`**
+**Console (alternative)**
 
-1. **Create an IAM role** for App Runner to pull from ECR (one-time). In IAM → Roles → Create role → AWS service → App Runner → Next → Attach **AWSAppRunnerServicePolicyForECRAccess** (or a custom policy that allows `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage`, `ecr:BatchCheckLayerAvailability` on your ECR repo) → Create role. Note the role ARN.
-2. From repo root:
-   ```bash
-   export APP_RUNNER_ECR_ACCESS_ROLE=arn:aws:iam::YOUR_ACCOUNT_ID:role/YourAppRunnerECRRole
-   ./scripts/create-apprunner-service.sh
-   ```
-   The script reads `.env.prod` and writes `apprunner-create-input.json` with all vars as `RuntimeEnvironmentVariables`, then prints the `aws apprunner create-service` command.
-3. Run the printed command (e.g. `aws apprunner create-service --cli-input-json file:///path/to/apprunner-create-input.json --region us-east-1`).
-4. Set GitHub variable **APP_RUNNER_SERVICE_ARN** to the new service ARN from the output.
+- **Backend:** Source = ECR `trusted-advisor-backend`, tag `latest`; port **8080**; health path `/health`; env vars from `.env.prod`. Deployment trigger = Manual.
+- **Frontend:** Source = ECR `trusted-advisor-frontend`, tag `latest`; port **3000**; health = TCP or `/`; set `BACKEND_URL` and `NEXT_PUBLIC_BACKEND_URL` to the backend App Runner URL. Deployment trigger = Manual.
 
-The generated JSON is in `.gitignore` (it contains secrets). You can re-run the script anytime to regenerate it after changing `.env.prod`.
+**Push config (env vars) from the command line**
 
-**Push config (env vars) to App Runner from the command line:**
+```bash
+# Backend
+./scripts/update-apprunner-env.sh .env.prod <BACKEND_SERVICE_ARN> us-east-1
 
-1. **Get your service ARN** (if you don’t have it):
-   ```bash
-   aws apprunner list-services --region us-east-1 --query 'ServiceSummaryList[*].ServiceArn' --output text
-   ```
-   Or use the ARN from the App Runner console (e.g. `arn:aws:apprunner:us-east-1:205562145226:service/myinvestments-prod/xxxx`).
+# Frontend
+./scripts/update-apprunner-env.sh .env.prod <FRONTEND_SERVICE_ARN> us-east-1
+```
 
-2. **From repo root**, push `.env.prod` to App Runner (SKIP_AUTH is never pushed; prod always uses real auth):
-   ```bash
-   export APP_RUNNER_SERVICE_ARN=arn:aws:apprunner:us-east-1:205562145226:service/YOUR_SERVICE_NAME/YOUR_ID
-   ./scripts/update-apprunner-env.sh .env.prod us-east-1
-   ```
-
-3. **Wait for the deployment** to complete. In the Console, the service status will go to "Operation in progress" then back to "Running". If the deployment fails (e.g. health check), App Runner rolls back and the previous config (including any SKIP_AUTH from the Console) returns. Fix the cause (health path, image) and run the script again.
-
-**Update env vars from CLI (e.g. after rotating X keys):** Edit `.env.prod`, then run the same two steps above.
+Get ARNs: `aws apprunner list-services --region us-east-1 --query 'ServiceSummaryList[*].[ServiceName,ServiceArn]' --output table`. Wait for each deployment to complete (status RUNNING).
 
 ---
 
@@ -158,11 +131,11 @@ The generated JSON is in `.gitignore` (it contains secrets). You can re-run the 
 - `AWS_SECRET_ACCESS_KEY` — secret key.
 - (Optional) `SLACK_WEBHOOK_URL` — for deploy notifications.
 
-**Variables** (Settings → Secrets and variables → Actions → Variables):
+**Variables** (Settings → Secrets and variables → Actions → Variables, **repository** level):
 
 - `ENABLE_AWS_DEPLOY` = `true`.
-- `APP_RUNNER_SERVICE_ARN` = the **Service ARN** from step 3 (e.g. `arn:aws:apprunner:us-east-1:205562145226:service/myinvestments-prod/xxxx`).
-- (Optional) `APP_URL` = the **Service URL** from step 3 (e.g. `https://xxxxx.us-east-1.awsapprunner.com`). If unset, CI gets it from `describe-service`.
+- `APP_RUNNER_SERVICE_ARN_BACKEND` = the **backend** Service ARN (e.g. `arn:aws:apprunner:us-east-1:YOUR_ACCOUNT:service/trusted-advisor-backend/xxxx`).
+- `APP_RUNNER_SERVICE_ARN_FRONTEND` = the **frontend** Service ARN (e.g. `arn:aws:apprunner:us-east-1:YOUR_ACCOUNT:service/trusted-advisor-frontend/xxxx`).
 - (Optional) `AWS_REGION` (e.g. `us-east-1`; default in workflow is `us-east-1`).
 
 **If you see "Invalid Access Role in AuthenticationConfiguration" or "Failed to copy the image from ECR":** App Runner uses an IAM role to pull from ECR. That role must exist, have the correct **trust policy** (allow `apprunner.amazonaws.com` to assume it), and have ECR pull permissions. See [Fix ECR access role](#fix-ecr-access-role) below.
@@ -170,15 +143,15 @@ The generated JSON is in `.gitignore` (it contains secrets). You can re-run the 
 **If you see `exec format error` in App Runner logs:** App Runner only runs **linux/amd64**. That error means the image in ECR was built for another arch (e.g. arm64 on a Mac).
 
 - **Fix 1 (recommended):** Push to **main** so CI runs. The workflow builds with `platforms: linux/amd64` and the Dockerfile uses `FROM --platform=linux/amd64`; it pushes to ECR and starts an App Runner deployment. After that run, the service will pull the new amd64 image.
-- **Fix 2:** If you already pushed from this repo and still see the error, the **current** image in ECR may be an old arm64 one. In ECR → `myinvestments` → delete the `latest` (and any other) tag(s) for the bad image, then push to main again so CI builds and pushes a fresh amd64 image and deploys.
+- **Fix 2:** If you already pushed from this repo and still see the error, the **current** image in ECR may be an old arm64 one. In ECR → `trusted-advisor-backend` or `trusted-advisor-frontend` → delete the `latest` (and any other) tag(s) for the bad image, then push to main again so CI builds and pushes a fresh amd64 image and deploys.
 - **Local build/push:** Always use `docker build --platform linux/amd64 ...` and push that image to ECR.
 
 ---
 
 ## 5. After that
 
-- Push to **main**: CI builds the image, pushes to ECR, runs **App Runner** `start-deployment`, waits for the operation, then health-checks and (optionally) Slack.
-- Set **NEXTAUTH_URL** in the App Runner service (and in X callback) to the App Runner **Service URL** (e.g. `https://xxxxx.us-east-1.awsapprunner.com`).
+- Push to **main**: CI builds both images, pushes to ECR, runs **App Runner** `start-deployment` for backend and frontend (if ARNs are set), waits for each operation.
+- Set **FRONTEND_URL** on the **backend** service to the frontend App Runner URL. Set **BACKEND_URL** / **NEXT_PUBLIC_BACKEND_URL** on the **frontend** service to the backend App Runner URL. For OAuth, set redirect URIs in Google/GitHub to your frontend App Runner URL.
 
 ### Auth: avoid `[auth][warn][env-url-basepath-mismatch]`
 
@@ -201,7 +174,7 @@ When deployments fail with **Invalid Access Role in AuthenticationConfiguration*
    aws apprunner describe-service --service-arn YOUR_SERVICE_ARN --region us-east-1 \
      --query 'Service.SourceConfiguration.AuthenticationConfiguration.AccessRoleArn' --output text
    ```
-   Example: `arn:aws:iam::205562145226:role/AppRunnerECRAccess`
+   Example: `arn:aws:iam::YOUR_ACCOUNT_ID:role/AppRunnerECRAccess`
 
 2. **Create or fix the role in IAM**
    - IAM → Roles → look for that role name (e.g. `AppRunnerECRAccess`). If it’s missing, create it; if it exists, open it to fix trust + permissions.
@@ -223,7 +196,7 @@ When deployments fail with **Invalid Access Role in AuthenticationConfiguration*
      - `ecr:GetDownloadUrlForLayer`
      - `ecr:BatchGetImage`
      - `ecr:BatchCheckLayerAvailability`
-     on resource `arn:aws:ecr:us-east-1:YOUR_ACCOUNT_ID:repository/myinvestments` (and `*` for `GetAuthorizationToken` if you use a custom policy; ECR pull typically uses the repo ARN).
+     on resources `arn:aws:ecr:us-east-1:YOUR_ACCOUNT_ID:repository/trusted-advisor-backend` and `.../trusted-advisor-frontend` (and `*` for `GetAuthorizationToken` if you use a custom policy; ECR pull typically uses the repo ARNs).
 
 3. **Redeploy**
    After saving the role, start a new deployment (no service update needed if the role ARN is unchanged):
@@ -238,7 +211,8 @@ When deployments fail with **Invalid Access Role in AuthenticationConfiguration*
 | Step | What | Done? |
 |------|------|--------|
 | 1 | IAM: ECR + App Runner permissions on deploy user | ☐ |
-| 2 | ECR repo `myinvestments` exists and has at least one image (e.g. `latest`) | ☐ |
-| 3 | App Runner service created (ECR source, port 3000, env vars), status Running | ☐ |
-| 4 | GitHub: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ENABLE_AWS_DEPLOY=true`, `APP_RUNNER_SERVICE_ARN` | ☐ |
-| 5 | Push to main and confirm “Build & Deploy to App Runner” succeeds | ☐ |
+| 2 | ECR repos `trusted-advisor-backend` and `trusted-advisor-frontend` exist and have at least one image (e.g. `latest`) | ☐ |
+| 3 | App Runner **backend** service created (port 8080, `/health`), status Running | ☐ |
+| 4 | App Runner **frontend** service created (port 3000, BACKEND_URL set), status Running | ☐ |
+| 5 | GitHub: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ENABLE_AWS_DEPLOY=true`, `APP_RUNNER_SERVICE_ARN_BACKEND`, `APP_RUNNER_SERVICE_ARN_FRONTEND` | ☐ |
+| 6 | Push to main and confirm “Deploy to AWS App Runner” workflow succeeds | ☐ |
