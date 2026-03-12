@@ -35,6 +35,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Check backend service is RUNNING
+        run: |
+          ARN="${{ vars.APP_RUNNER_SERVICE_ARN_BACKEND }}"
+          ARN="${ARN//$'\r'/}"
+          ARN="$(echo "$ARN" | tr -d '\n' | xargs)"
+          REGION="${{ env.AWS_REGION }}"
+          STATUS=$(aws apprunner describe-service --service-arn "$ARN" --region "$REGION" --query 'Service.Status' --output text 2>/dev/null || echo "UNKNOWN")
+          if [ "$STATUS" != "RUNNING" ]; then
+            echo "::error::Backend App Runner service is not RUNNING (current state: $STATUS). You can only start a deployment when the service is RUNNING."
+            echo "If the service is CREATE_FAILED: fix it in AWS (add env vars with update-apprunner-env.sh, switch to TCP health check, or delete and recreate the service). See docs/deploy-apprunner-cli.md Troubleshooting."
+            exit 1
+          fi
+
       - name: Start App Runner deployment (backend)
         run: |
           ARN="${{ vars.APP_RUNNER_SERVICE_ARN_BACKEND }}"
@@ -73,6 +86,18 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check frontend service is RUNNING
+        run: |
+          ARN="${{ vars.APP_RUNNER_SERVICE_ARN_FRONTEND }}"
+          ARN="${ARN//$'\r'/}"
+          ARN="$(echo "$ARN" | tr -d '\n' | xargs)"
+          REGION="${{ env.AWS_REGION }}"
+          STATUS=$(aws apprunner describe-service --service-arn "$ARN" --region "$REGION" --query 'Service.Status' --output text 2>/dev/null || echo "UNKNOWN")
+          if [ "$STATUS" != "RUNNING" ]; then
+            echo "::error::Frontend App Runner service is not RUNNING (current state: $STATUS). Fix the service in AWS, then re-run this workflow."
+            exit 1
+          fi
 
       - name: Start App Runner deployment (frontend)
         run: |

@@ -115,6 +115,12 @@ Generated files `apprunner-backend-input.json` and `apprunner-frontend-input.jso
 
 ## Troubleshooting
 
+- **"Can't start a deployment because it isn't in RUNNING state"**  
+  The workflow only starts a deployment when the service status is **RUNNING**. If the service is **CREATE_FAILED**, fix the initial failure (see below), then either wait for the next push or re-run the "Deploy to AWS App Runner" workflow manually. You cannot start a deployment on a CREATE_FAILED service.
+
+- **Service stuck in CREATE_FAILED**  
+  The first deployment failed (image pull, health check, or app crash). Check Application logs in the App Runner console. Common fixes: (1) Push env vars so the app can start: `./scripts/update-apprunner-env.sh .env.prod <BACKEND_ARN> us-east-1`, then start a new deployment: `aws apprunner start-deployment --service-arn <ARN> --region us-east-1`. (2) If health check is the problem, switch to TCP: `aws apprunner update-service --service-arn <ARN> --region us-east-1 --health-check-configuration '{"Protocol":"TCP","Interval":10,"Timeout":5,"HealthyThreshold":1,"UnhealthyThreshold":5}'`, then `start-deployment`. (3) If the service never recovers, delete it and create a new one with the scripts (and correct env/health), then set the **new** service ARN in GitHub Variables.
+
 - **"Invalid Access Role" / "Failed to copy the image from ECR"**  
   The role from `iam-apprunner-ecr-role.sh` must have trust for `build.apprunner.amazonaws.com` and the managed policy `AWSAppRunnerServicePolicyForECRAccess`. Re-run the script or fix the role in IAM.
 

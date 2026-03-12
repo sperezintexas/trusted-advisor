@@ -20,7 +20,8 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-# Build JSON object from env file (KEY=VALUE, one per line; skip comments and empty)
+# Build JSON object from env file (KEY=VALUE; value may contain =). Skip comments and empty.
+# split("=") then .[0] and (.[1:]|join("=")) so values with = work (jq split has no limit).
 ENV_JSON=$(awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/' "$ENV_FILE" | grep -v '^#' | while IFS= read -r line; do
   key="${line%%=*}"
   key="${key#export }"
@@ -30,7 +31,8 @@ ENV_JSON=$(awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/' "$ENV_FILE" | grep -v '^#' | whi
   val="${val%"${val##*[! ]}"}"
   [ -n "$key" ] && echo "$key=$val"
 done | jq -R -s '
-  split("\n") | map(select(length > 0) | split("=", 2) | {(.[0]): .[1]}) | add // {}
+  [ split("\n")[] | select(length > 0) | split("=") | (.[0], (.[1:] | join("="))) ] as $pairs |
+  reduce range(0; ($pairs | length); 2) as $i ({}; . + {($pairs[$i]): ($pairs[$i+1] // "")})
 ')
 
 # Get current source configuration; replace only RuntimeEnvironmentVariables, keep Port etc.
