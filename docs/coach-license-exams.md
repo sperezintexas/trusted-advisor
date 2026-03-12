@@ -2,6 +2,8 @@
 
 The Coach module provides timed, multiple-choice practice and full exams for FINRA securities licensing exams. Users can check answers per question (with correct/incorrect highlighting and optional explanation), then submit to see a score and pass/fail, or cancel without saving.
 
+![Exam Coach - Choose an exam to start](coachexams.jpg)
+
 ## Supported exams
 
 | Code       | Name                              | Full exam              | Time limit (full) | Passing % |
