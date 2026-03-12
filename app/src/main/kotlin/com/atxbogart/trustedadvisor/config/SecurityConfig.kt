@@ -21,7 +21,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableWebSecurity
 class SecurityConfig(
     @Value("\${app.auth-secret:}") private val authSecret: String,
-    @Value("\${app.skip-auth:false}") private val skipAuth: Boolean
+    @Value("\${app.skip-auth:false}") private val skipAuth: Boolean,
+    @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
 
     @Bean
@@ -30,12 +31,13 @@ class SecurityConfig(
         http
             .cors { it.configurationSource(corsConfigurationSource()) }
             .csrf { it.disable() }
-            // OAuth2 login for browser-based auth; keeps API stateless.
+            // OAuth2 login creates a session so /api/me etc. can use the principal after redirect.
             .oauth2Login { oauth2 ->
                 oauth2.loginPage("/login")
+                oauth2.defaultSuccessUrl(frontendUrl, true)
             }
             .sessionManagement { session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             }
 
         if (skipAuth) {

@@ -2,7 +2,7 @@
 
 import AppHeader from '../components/AppHeader'
 import { isAuthDebugEnabled, authDebugLog, checkSessionStatus } from '@/lib/auth'
-import { apiUrl, defaultFetchOptions } from '@/lib/api'
+import { apiUrl, getBackendUrl, defaultFetchOptions } from '@/lib/api'
 import { useEffect } from 'react'
 
 export default function LoginPage() {
@@ -26,11 +26,11 @@ export default function LoginPage() {
   }, [debugOn])
 
   function loginWithGoogle() {
-    window.location.href = `${apiUrl('/oauth2/authorization/google')}`.replace('/api/api', '/api')
+    window.location.href = `${getBackendUrl()}/oauth2/authorization/google`
   }
 
   function loginWithGithub() {
-    window.location.href = `${apiUrl('/oauth2/authorization/github')}`.replace('/api/api', '/api')
+    window.location.href = `${getBackendUrl()}/oauth2/authorization/github`
   }
 
   return (

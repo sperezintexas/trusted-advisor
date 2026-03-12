@@ -40,9 +40,11 @@ xai:
     key: ${XAI_API_KEY:}
 
 # API key auth: frontend sends X-API-Key or Authorization: Bearer <key>; must match AUTH_SECRET.
+# OAuth2 success redirect and cookie: set FRONTEND_URL when frontend is on another origin.
 app:
   auth-secret: ${AUTH_SECRET:}
   auth-debug: ${AUTH_DEBUG:false}
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
 
 logging:
   level:
