@@ -27,26 +27,19 @@ export APP_RUNNER_ECR_ACCESS_ROLE=arn:aws:iam::YOUR_ACCOUNT:role/AppRunnerECRAcc
 
 ### 3. First images in ECR
 
-App Runner needs at least one image per repo before you can create the service. Either:
+App Runner needs at least one image per repo before you can create the service. Pick one:
 
-- **Option A:** Push to `main` and let CI build and push both images to ECR, then continue below; or  
-- **Option B:** Build and push locally (must be `linux/amd64` for App Runner):
+**Option A — Push to `main` (easiest)**  
+In GitHub: set **Secrets** `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for this repo. Push to `main`; CI will build and push both images to ECR. Wait for the "Build and push to ECR" job to finish, then continue with step 4.
+
+**Option B — Build and push locally**  
+From repo root (Docker required, images must be `linux/amd64` for App Runner):
 
 ```bash
-export AWS_REGION=us-east-1
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-
-# Backend (from repo root)
-docker build --platform linux/amd64 -f Dockerfile.backend -t trusted-advisor-backend:latest .
-docker tag trusted-advisor-backend:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/trusted-advisor-backend:latest
-docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/trusted-advisor-backend:latest
-
-# Frontend (from repo root)
-docker build --platform linux/amd64 -f frontend/Dockerfile -t trusted-advisor-frontend:latest ./frontend
-docker tag trusted-advisor-frontend:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/trusted-advisor-frontend:latest
-docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/trusted-advisor-frontend:latest
+./scripts/aws-ecr-push-local.sh us-east-1
 ```
+
+That script logs in to ECR, builds backend and frontend, and pushes `trusted-advisor-backend:latest` and `trusted-advisor-frontend:latest`. Then continue with step 4.
 
 ### 4. Create backend App Runner service
 
@@ -110,6 +103,7 @@ After that, every successful CI run on `main` will trigger an App Runner deploym
 | Script | Purpose |
 |--------|--------|
 | `aws-ecr-setup.sh [region]` | Create ECR repos for backend and frontend |
+| `aws-ecr-push-local.sh [region]` | Build both images (linux/amd64) and push to ECR from your machine |
 | `iam-apprunner-ecr-role.sh [role-name]` | Create IAM role for App Runner ECR pull (default: `AppRunnerECRAccess`) |
 | `create-apprunner-service-backend.sh [region]` | Create backend App Runner service (requires `APP_RUNNER_ECR_ACCESS_ROLE`) |
 | `create-apprunner-service-frontend.sh [region] [backend-url]` | Create frontend App Runner service |
