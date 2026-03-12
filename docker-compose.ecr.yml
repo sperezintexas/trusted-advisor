@@ -1,0 +1,32 @@
+# Run on EC2 using images from ECR (no local build).
+# Usage:
+#   export ECR_REGISTRY=<account>.dkr.ecr.<region>.amazonaws.com
+#   docker compose -f docker-compose.ecr.yml pull
+#   docker compose -f docker-compose.ecr.yml up -d
+# See docs/deploy-ec2-ecr.md.
+
+services:
+  backend:
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/trusted-advisor-backend:latest
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  frontend:
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY}/trusted-advisor-frontend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      BACKEND_URL: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
