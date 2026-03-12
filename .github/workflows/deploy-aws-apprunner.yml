@@ -37,14 +37,17 @@ jobs:
 
       - name: Start App Runner deployment (backend)
         run: |
-          aws apprunner start-deployment \
-            --service-arn "${{ vars.APP_RUNNER_SERVICE_ARN_BACKEND }}" \
-            --region ${{ env.AWS_REGION }}
+          ARN="${{ vars.APP_RUNNER_SERVICE_ARN_BACKEND }}"
+          ARN="${ARN//$'\r'/}"
+          ARN="$(echo "$ARN" | tr -d '\n' | xargs)"
+          aws apprunner start-deployment --service-arn "$ARN" --region ${{ env.AWS_REGION }}
         id: start
 
       - name: Wait for deployment
         run: |
           ARN="${{ vars.APP_RUNNER_SERVICE_ARN_BACKEND }}"
+          ARN="${ARN//$'\r'/}"
+          ARN="$(echo "$ARN" | tr -d '\n' | xargs)"
           REGION="${{ env.AWS_REGION }}"
           for i in $(seq 1 30); do
             STATUS=$(aws apprunner list-operations --service-arn "$ARN" --region "$REGION" --query 'OperationSummaryList[0].Status' --output text 2>/dev/null || echo "UNKNOWN")
@@ -73,13 +76,16 @@ jobs:
 
       - name: Start App Runner deployment (frontend)
         run: |
-          aws apprunner start-deployment \
-            --service-arn "${{ vars.APP_RUNNER_SERVICE_ARN_FRONTEND }}" \
-            --region ${{ env.AWS_REGION }}
+          ARN="${{ vars.APP_RUNNER_SERVICE_ARN_FRONTEND }}"
+          ARN="${ARN//$'\r'/}"
+          ARN="$(echo "$ARN" | tr -d '\n' | xargs)"
+          aws apprunner start-deployment --service-arn "$ARN" --region ${{ env.AWS_REGION }}
 
       - name: Wait for deployment
         run: |
           ARN="${{ vars.APP_RUNNER_SERVICE_ARN_FRONTEND }}"
+          ARN="${ARN//$'\r'/}"
+          ARN="$(echo "$ARN" | tr -d '\n' | xargs)"
           REGION="${{ env.AWS_REGION }}"
           for i in $(seq 1 30); do
             STATUS=$(aws apprunner list-operations --service-arn "$ARN" --region "$REGION" --query 'OperationSummaryList[0].Status' --output text 2>/dev/null || echo "UNKNOWN")

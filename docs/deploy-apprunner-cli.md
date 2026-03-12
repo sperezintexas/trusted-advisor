@@ -87,7 +87,9 @@ Wait for both deployments to finish (status **RUNNING**).
 
 ### 7. GitHub Actions
 
-In the repo: **Settings → Secrets and variables → Actions**.
+In the repo: **Settings → Secrets and variables → Actions**. Use **repository** Variables (the "Variables" tab), not Environment-specific variables.
+
+- **ARNs:** Paste with no trailing space or newline. If deploy fails with "resource arn is invalid", re-enter the value in one line and save again.
 
 - **Secrets:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - **Variables:**  
