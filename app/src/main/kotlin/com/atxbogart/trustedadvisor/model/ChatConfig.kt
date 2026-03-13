@@ -4,6 +4,8 @@ data class ChatConfig(
     val debug: Boolean = false,
     val tools: Map<String, Boolean> = mapOf(
         "webSearch" to true,
+        "yahooFinance" to true,
+        "internalActions" to true,
         "portfolio" to true,
         "coveredCallRecs" to true
     ),

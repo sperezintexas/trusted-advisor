@@ -14,6 +14,7 @@ class ChatService(
     private val personaFileService: PersonaFileService,
     private val chatHistoryRepository: ChatHistoryRepository,
     private val grokService: GrokService,
+    private val chatConfigService: ChatConfigService,
     private val userRepository: UserRepository,
     private val planLimitService: PlanLimitService,
     private val tokenUsageService: TokenUsageService
@@ -42,10 +43,13 @@ class ChatService(
             personaFileService.getFileContext(it, limits.maxFileContextTokens)
         } ?: ""
 
-        val toolsSuffix = buildToolsAwarenessSuffix(
-            webSearchEnabled = persona?.webSearchEnabled ?: true,
-            yahooFinanceEnabled = persona?.yahooFinanceEnabled ?: true
+        val config = chatConfigService.getConfig()
+        val toolPolicy = ToolExecutionPolicy(
+            webSearchEnabled = (persona?.webSearchEnabled ?: true) && (config.tools["webSearch"] ?: true),
+            yahooFinanceEnabled = (persona?.yahooFinanceEnabled ?: true) && (config.tools["yahooFinance"] ?: true),
+            internalActionsEnabled = config.tools["internalActions"] ?: true
         )
+        val toolsSuffix = buildToolsAwarenessSuffix(toolPolicy)
 
         val systemPrompt = buildSystemPrompt(basePrompt, fileContext, toolsSuffix)
 
@@ -65,8 +69,12 @@ class ChatService(
             messages = messages,
             max_tokens = limits.maxOutputTokens
         )
-        val grokResponse = grokService.chat(grokReq)
-        val responseContent = grokResponse.choices.getOrNull(0)?.message?.content ?: ""
+        val grokResponse = grokService.chatWithTools(
+            request = grokReq,
+            toolPolicy = toolPolicy,
+            personaId = request.personaId
+        )
+        val responseContent = grokResponse.response
 
         val consumedTokens = grokResponse.usage?.total_tokens?.toLong()
             ?: estimateTokens(messages.sumOf { it.content.length } + responseContent.length).toLong()
@@ -88,7 +96,12 @@ class ChatService(
             ?: ChatHistory(userId = request.userId, messages = history.toMutableList())
         chatHistoryRepository.save(chatHistory.copy(updatedAt = LocalDateTime.now(ZoneOffset.UTC)))
 
-        return ChatResponse(response = responseContent, usage = grokResponse.usage)
+        return ChatResponse(
+            response = responseContent,
+            usage = grokResponse.usage,
+            citations = grokResponse.citations,
+            toolEvents = grokResponse.toolEvents
+        )
     }
 
     fun getChatLimits(userId: String): ChatLimitsView {
@@ -166,16 +179,16 @@ class ChatService(
         return parts.joinToString("\n\n")
     }
 
-    private fun buildToolsAwarenessSuffix(
-        webSearchEnabled: Boolean,
-        yahooFinanceEnabled: Boolean
-    ): String {
+    private fun buildToolsAwarenessSuffix(toolPolicy: ToolExecutionPolicy): String {
         val parts = mutableListOf<String>()
-        if (webSearchEnabled) {
+        if (toolPolicy.webSearchEnabled) {
             parts.add("web_search (for current news, earnings, events, real-time facts)")
         }
-        if (yahooFinanceEnabled) {
+        if (toolPolicy.yahooFinanceEnabled) {
             parts.add("yahoo-finance (for live quotes, options chains, market data)")
+        }
+        if (toolPolicy.internalActionsEnabled) {
+            parts.add("internal metadata tools (for persona metadata and coach exam pool stats)")
         }
         if (parts.isEmpty()) return ""
         return "Live data: You have access to ${parts.joinToString(" and ")}. " +
