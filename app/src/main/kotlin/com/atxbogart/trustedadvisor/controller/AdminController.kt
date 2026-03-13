@@ -2,13 +2,17 @@ package com.atxbogart.trustedadvisor.controller
 
 import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import com.atxbogart.trustedadvisor.model.AccessRequest
+import com.atxbogart.trustedadvisor.model.CoachExamAttempt
 import com.atxbogart.trustedadvisor.model.ExamCode
 import com.atxbogart.trustedadvisor.model.PersonaFile
+import com.atxbogart.trustedadvisor.model.RecommendationStatus
 import com.atxbogart.trustedadvisor.model.User
 import com.atxbogart.trustedadvisor.model.UserRole
+import com.atxbogart.trustedadvisor.repository.CoachExamAttemptRepository
 import com.atxbogart.trustedadvisor.repository.UserRepository
 import com.atxbogart.trustedadvisor.service.AccessRequestResult
 import com.atxbogart.trustedadvisor.service.AccessRequestService
+import com.atxbogart.trustedadvisor.service.CoachService
 import com.atxbogart.trustedadvisor.service.GeneratedQuestionView
 import com.atxbogart.trustedadvisor.service.GenerateQuestionsResult
 import com.atxbogart.trustedadvisor.service.PersonaFileResult
@@ -36,6 +40,8 @@ class AdminController(
     @Value("\${app.admin-emails:}") private val adminEmailsConfig: String,
     private val accessRequestService: AccessRequestService,
     private val userRepository: UserRepository,
+    private val coachExamAttemptRepository: CoachExamAttemptRepository,
+    private val coachService: CoachService,
     private val personaFileService: PersonaFileService,
     private val questionGeneratorService: QuestionGeneratorService,
     private val coachQuestionGenerationSchedulerService: CoachQuestionGenerationSchedulerService
@@ -538,6 +544,80 @@ class AdminController(
         return ResponseEntity.ok(updated)
     }
 
+    @PostMapping("/coach/generation/configs/run-all")
+    fun runAllCoachGenerationNow(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
+    ): ResponseEntity<CoachGenerationConfigListResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) return ResponseEntity.status(403).build()
+        val updated = coachQuestionGenerationSchedulerService.runAllNow()
+        return ResponseEntity.ok(CoachGenerationConfigListResponse(configs = updated))
+    }
+
+    @GetMapping("/jobs/overview")
+    fun getJobsOverview(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
+    ): ResponseEntity<AdminJobsOverviewResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) return ResponseEntity.status(403).build()
+
+        val queued = coachExamAttemptRepository.countByRecommendationStatus(RecommendationStatus.QUEUED)
+        val processing = coachExamAttemptRepository.countByRecommendationStatus(RecommendationStatus.PROCESSING)
+        val failed = coachExamAttemptRepository.countByRecommendationStatus(RecommendationStatus.FAILED)
+        val ready = coachExamAttemptRepository.countByRecommendationStatus(RecommendationStatus.READY)
+
+        val recent = coachExamAttemptRepository.findTop20ByRecommendationStatusInOrderByCompletedAtDesc(
+            listOf(RecommendationStatus.QUEUED, RecommendationStatus.PROCESSING, RecommendationStatus.FAILED)
+        )
+        val fullExamCache = coachService.getFullExamCacheStatuses().map {
+            FullExamCacheView(
+                examCode = it.examCode.name,
+                expectedQuestionCount = it.expectedQuestionCount,
+                hasTodayCache = it.hasTodayCache,
+                cacheDate = it.cacheDate,
+                questionCount = it.questionCount,
+                generatedAt = it.generatedAt
+            )
+        }
+
+        return ResponseEntity.ok(
+            AdminJobsOverviewResponse(
+                recommendationQueue = RecommendationQueueOverview(
+                    queued = queued,
+                    processing = processing,
+                    failed = failed,
+                    ready = ready,
+                    recent = recent.map { it.toRecommendationJobView() }
+                ),
+                fullExamCache = fullExamCache
+            )
+        )
+    }
+
+    @PostMapping("/jobs/recommendations/{attemptId}/retry")
+    fun retryRecommendationJob(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable attemptId: String
+    ): ResponseEntity<AdminActionResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) return ResponseEntity.status(403).build()
+
+        val attempt = coachExamAttemptRepository.findById(attemptId).orElse(null)
+            ?: return ResponseEntity.notFound().build()
+        val updated = attempt.copy(
+            recommendationStatus = RecommendationStatus.QUEUED,
+            recommendationError = null
+        )
+        coachExamAttemptRepository.save(updated)
+        return ResponseEntity.ok(
+            AdminActionResponse(
+                success = true,
+                message = "Recommendation job queued for retry",
+                request = null
+            )
+        )
+    }
+
     private fun PersonaFile.toAdminDocumentView() = AdminDocumentView(
         id = id ?: "",
         personaId = personaId,
@@ -581,6 +661,18 @@ class AdminController(
         registered = registered,
         createdAt = createdAt.toString(),
         lastLoginAt = lastLoginAt?.toString()
+    )
+
+    private fun CoachExamAttempt.toRecommendationJobView() = RecommendationJobView(
+        attemptId = id ?: "",
+        userId = userId,
+        examCode = examCode.name,
+        recommendationStatus = recommendationStatus.name,
+        recommendationAttempts = recommendationAttempts,
+        percentage = percentage,
+        completedAt = completedAt.toString(),
+        recommendationUpdatedAt = recommendationUpdatedAt?.toString(),
+        recommendationError = recommendationError
     )
 }
 
@@ -698,4 +790,38 @@ data class CoachGenerationConfigUpdateRequest(
     val personaId: String? = null,
     val targetPoolSize: Int? = null,
     val intervalMinutes: Int? = null
+)
+
+data class AdminJobsOverviewResponse(
+    val recommendationQueue: RecommendationQueueOverview,
+    val fullExamCache: List<FullExamCacheView>
+)
+
+data class RecommendationQueueOverview(
+    val queued: Long,
+    val processing: Long,
+    val failed: Long,
+    val ready: Long,
+    val recent: List<RecommendationJobView>
+)
+
+data class RecommendationJobView(
+    val attemptId: String,
+    val userId: String,
+    val examCode: String,
+    val recommendationStatus: String,
+    val recommendationAttempts: Int,
+    val percentage: Double,
+    val completedAt: String,
+    val recommendationUpdatedAt: String?,
+    val recommendationError: String?
+)
+
+data class FullExamCacheView(
+    val examCode: String,
+    val expectedQuestionCount: Int,
+    val hasTodayCache: Boolean,
+    val cacheDate: String?,
+    val questionCount: Int?,
+    val generatedAt: String?
 )

@@ -11,4 +11,6 @@ interface CoachExamAttemptRepository : MongoRepository<CoachExamAttempt, String>
     fun findByUserIdOrderByCompletedAtDesc(userId: String): List<CoachExamAttempt>
     fun findByUserIdAndExamCodeOrderByCompletedAtDesc(userId: String, examCode: ExamCode): List<CoachExamAttempt>
     fun findTop10ByRecommendationStatusOrderByCompletedAtAsc(status: RecommendationStatus): List<CoachExamAttempt>
+    fun countByRecommendationStatus(status: RecommendationStatus): Long
+    fun findTop20ByRecommendationStatusInOrderByCompletedAtDesc(statuses: List<RecommendationStatus>): List<CoachExamAttempt>
 }

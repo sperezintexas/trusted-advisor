@@ -330,6 +330,36 @@ export type CoachGenerationConfigListResponse = {
   configs: CoachGenerationConfigView[]
 }
 
+export type RecommendationJobView = {
+  attemptId: string
+  userId: string
+  examCode: string
+  recommendationStatus: 'QUEUED' | 'PROCESSING' | 'FAILED' | 'READY' | 'NONE' | string
+  recommendationAttempts: number
+  percentage: number
+  completedAt: string
+  recommendationUpdatedAt: string | null
+  recommendationError: string | null
+}
+
+export type AdminJobsOverviewResponse = {
+  recommendationQueue: {
+    queued: number
+    processing: number
+    failed: number
+    ready: number
+    recent: RecommendationJobView[]
+  }
+  fullExamCache: Array<{
+    examCode: string
+    expectedQuestionCount: number
+    hasTodayCache: boolean
+    cacheDate: string | null
+    questionCount: number | null
+    generatedAt: string | null
+  }>
+}
+
 export async function generatePersonaQuestions(
   personaId: string,
   count: number,
@@ -408,6 +438,42 @@ export async function runCoachGenerationNow(
     })
     if (!res.ok) return null
     return (await res.json()) as CoachGenerationConfigView
+  } catch {
+    return null
+  }
+}
+
+export async function runAllCoachGenerationNow(): Promise<CoachGenerationConfigListResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/admin/coach/generation/configs/run-all'), {
+      ...defaultFetchOptions(),
+      method: 'POST',
+    })
+    if (!res.ok) return null
+    return (await res.json()) as CoachGenerationConfigListResponse
+  } catch {
+    return null
+  }
+}
+
+export async function fetchAdminJobsOverview(): Promise<AdminJobsOverviewResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/admin/jobs/overview'), defaultFetchOptions())
+    if (!res.ok) return null
+    return (await res.json()) as AdminJobsOverviewResponse
+  } catch {
+    return null
+  }
+}
+
+export async function retryRecommendationJob(attemptId: string): Promise<AdminActionResponse | null> {
+  try {
+    const res = await fetch(apiUrl(`/admin/jobs/recommendations/${attemptId}/retry`), {
+      ...defaultFetchOptions(),
+      method: 'POST',
+    })
+    if (!res.ok) return null
+    return (await res.json()) as AdminActionResponse
   } catch {
     return null
   }

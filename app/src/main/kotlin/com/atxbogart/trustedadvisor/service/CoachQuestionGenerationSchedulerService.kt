@@ -103,6 +103,24 @@ class CoachQuestionGenerationSchedulerService(
         return updated.toView(coachService.getPoolSize(examCode))
     }
 
+    fun runAllNow(): List<CoachGenerationConfigView> {
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+        return coachService.getExams()
+            .sortedBy { it.code.name }
+            .map { exam ->
+                val current = configRepository.findByExamCode(exam.code)
+                    ?: defaultConfigForExam(exam.code, exam.totalQuestionsInOutline)
+                val updated = configRepository.save(
+                    current.copy(
+                        enabled = true,
+                        nextRunAt = now,
+                        updatedAt = now
+                    )
+                )
+                updated.toView(coachService.getPoolSize(exam.code))
+            }
+    }
+
     @Scheduled(fixedDelay = 5000L)
     fun tick() {
         val now = LocalDateTime.now(ZoneOffset.UTC)
