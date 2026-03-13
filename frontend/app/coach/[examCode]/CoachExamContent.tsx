@@ -15,7 +15,7 @@ import type {
 import { EXAM_CONFIG } from '@/types/coach'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 const VALID_EXAM_CODES: ExamCode[] = ['SIE', 'SERIES_7', 'SERIES_57', 'SERIES_65']
@@ -126,6 +126,7 @@ type Phase = 'start' | 'exam' | 'results'
 const PRACTICE_QUESTION_COUNT = 20
 
 export default function CoachExamContent() {
+  const router = useRouter()
   const params = useParams()
   const examCodeParam = typeof params.examCode === 'string' ? params.examCode : ''
   const examCode: ExamCode | null = isExamCode(examCodeParam) ? examCodeParam : null
@@ -346,6 +347,27 @@ export default function CoachExamContent() {
     }
   }, [currentQuestion, grokHintLoading, grokHints])
 
+  const handleAskInChat = useCallback(() => {
+    if (!currentQuestion || !examCode) return
+    const selected = answers[currentQuestion.id]
+    const choicesText = currentQuestion.choices
+      .map((c) => `${c.letter}) ${c.text}`)
+      .join('\n')
+    const prompt = [
+      `I'm working on a ${examCode} practice exam question.`,
+      'Please explain the core concepts being tested and walk through any calculations step-by-step if needed.',
+      'Then help me reason to the right approach clearly and briefly.',
+      '',
+      `Question: ${currentQuestion.question}`,
+      '',
+      `Choices:\n${choicesText}`,
+      '',
+      `My selected answer: ${selected ?? '(not selected yet)'}`,
+    ].join('\n')
+
+    router.push(`/chat?q=${encodeURIComponent(prompt)}`)
+  }, [answers, currentQuestion, examCode, router])
+
   if (!examCode) {
     return (
       <>
@@ -552,6 +574,13 @@ export default function CoachExamContent() {
                     className="rounded-lg border border-[var(--docs-accent)] bg-[var(--docs-accent)]/10 px-4 py-2 text-sm font-medium text-[var(--docs-accent)] hover:bg-[var(--docs-accent)]/20 disabled:opacity-50"
                   >
                     {grokHintLoading ? 'Asking Grok…' : grokHints[currentQuestion.id] ? 'Grok hint shown' : 'Grok'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAskInChat}
+                    className="rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)]"
+                  >
+                    Ask in Chat
                   </button>
                 </div>
                 {grokHints[currentQuestion.id] && (

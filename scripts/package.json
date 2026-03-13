@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "seed-admins": "node seed-admin-users.mjs"
+    "seed-admins": "node seed-admin-users.mjs",
+    "remove-user": "node remove-user.mjs",
+    "access-check": "node access-request-admin.mjs check",
+    "access-approve": "node access-request-admin.mjs approve"
   },
   "dependencies": {
     "dotenv": "^16.3.1",

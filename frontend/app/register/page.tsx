@@ -65,6 +65,10 @@ export default function RegisterPage() {
             You&apos;ve been authorized to use Trusted Advisor. Confirm your details
             and choose your plan.
           </p>
+          <div className="mt-4 rounded-lg border border-[var(--docs-border)] bg-[var(--docs-code-bg)] px-3 py-2 text-xs text-[var(--docs-muted)]">
+            Plan rates: <span className="font-medium text-[var(--docs-text)]">Basic $0/mo</span>{' '}
+            · <span className="font-medium text-[var(--docs-text)]">Premium $9.99/mo</span>
+          </div>
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
               <label className="block text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">
@@ -124,11 +128,13 @@ export default function RegisterPage() {
                   <div className="text-sm font-semibold text-[var(--docs-text)]">
                     Basic
                   </div>
-                  <div className="text-xs text-[var(--docs-muted)] mt-1">Free</div>
+                  <div className="text-xs text-[var(--docs-muted)] mt-1">$0.00 / month</div>
                   <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
                     <li>• Exam Coach access</li>
                     <li>• Practice exams</li>
                     <li>• Basic chat</li>
+                    <li>• 30 coach questions total</li>
+                    <li>• 10 chat questions total</li>
                   </ul>
                 </button>
                 <button
@@ -143,11 +149,13 @@ export default function RegisterPage() {
                   <div className="text-sm font-semibold text-[var(--docs-text)]">
                     Premium
                   </div>
-                  <div className="text-xs text-[var(--docs-muted)] mt-1">$9.99/mo</div>
+                  <div className="text-xs text-[var(--docs-muted)] mt-1">$9.99 / month</div>
                   <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
                     <li>• Everything in Basic</li>
                     <li>• AI Tutor sessions</li>
                     <li>• Priority support</li>
+                    <li>• Unlimited coach questions</li>
+                    <li>• Unlimited chat questions</li>
                   </ul>
                 </button>
               </div>
