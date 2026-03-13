@@ -109,7 +109,6 @@ export default function CoachPage() {
           <ul className="grid gap-3 sm:grid-cols-2">
             {exams.map((exam) => {
               const path = EXAM_CODE_PATH[exam.code]
-              const isSIE = exam.code === 'SIE'
               return (
                 <li
                   key={exam.id}
@@ -138,14 +137,6 @@ export default function CoachPage() {
                     >
                       Full exam ({exam.totalQuestionsInOutline} q)
                     </Link>
-                    {isSIE && (
-                      <Link
-                        href="/chat?exam=SIE"
-                        className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-1.5 text-sm text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)]"
-                      >
-                        Tutor session
-                      </Link>
-                    )}
                   </div>
                 </li>
               )

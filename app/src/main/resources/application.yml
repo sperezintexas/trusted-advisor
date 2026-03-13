@@ -42,12 +42,19 @@ xai:
 # API key auth: frontend sends X-API-Key or Authorization: Bearer <key>; must match AUTH_SECRET.
 # OAuth2 success redirect and cookie: set FRONTEND_URL when frontend is on another origin.
 # Admin emails: comma-separated list of emails with admin privileges (can approve/reject access requests).
+# Slack: webhook URL for admin notifications (access requests, approvals, etc.)
 app:
   auth-secret: ${AUTH_SECRET:}
   auth-debug: ${AUTH_DEBUG:false}
   skip-auth: ${APP_SKIP_AUTH:false}
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
   admin-emails: ${ADMIN_EMAILS:}
+  slack:
+    enabled: ${SLACK_ENABLED:false}
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+    reminder-enabled: ${SLACK_REMINDER_ENABLED:false}
+    reminder-interval-ms: ${SLACK_REMINDER_INTERVAL_MS:14400000}
+    reminder-initial-delay-ms: ${SLACK_REMINDER_INITIAL_DELAY_MS:60000}
 
 logging:
   level:

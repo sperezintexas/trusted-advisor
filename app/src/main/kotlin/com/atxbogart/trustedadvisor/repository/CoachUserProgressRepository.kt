@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository
 @Repository
 interface CoachUserProgressRepository : MongoRepository<CoachUserProgress, String> {
     fun findByUserIdAndExamCode(userId: String, examCode: ExamCode): CoachUserProgress?
+    fun findByUserId(userId: String): List<CoachUserProgress>
 }

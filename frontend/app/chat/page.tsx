@@ -17,11 +17,11 @@ type ApiUsage = {
 }
 
 const EXAMPLE_PROMPTS = [
-  'TSLA price',
-  'Portfolio risk',
-  'Covered call ideas',
-  'Market outlook',
-  'IONQ or ASTS targets for CSP 7–21 DTE',
+  'Give me 5 SIE-style multiple choice questions on capital markets.',
+  'Quiz me with 3 Series 7 options questions and explain each answer.',
+  'Create a 10-question mixed practice set for Series 57 with answer key.',
+  'Ask me one Series 65 ethics question at a time and wait for my answer.',
+  'Generate 5 exam questions on customer accounts and prohibited activities.',
 ]
 
 const SIE_TUTOR_INITIAL_PROMPT =

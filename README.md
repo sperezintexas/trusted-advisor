@@ -47,4 +47,45 @@ Trusted Advisor is an AI-powered coaching platform for financial exam prep and p
 ![Exam Coach - Practice for FINRA licensing exams](docs/coachexams.jpg)
 ![Exam Coach - Grok hints during timed practice](docs/hintscoach2.png)
 
-Trusted Advisor is built for outcomes: better preparation, better decision quality, and better performance at scale.
+---
+
+## Subscription basics
+
+Trusted Advisor supports two plan tiers:
+
+- `BASIC` - free tier
+- `PREMIUM` - paid tier (`$9.99/month`)
+
+### BASIC includes
+
+- Exam Coach access
+- Practice exams
+- Basic chat
+- Up to 30 coach questions total
+- Up to 10 chat questions total
+
+### PREMIUM includes
+
+- Everything in BASIC
+- AI Tutor sessions
+- Priority support
+- Full or practice exams as often as needed
+- Unlimited coach questions
+- Unlimited chat questions
+
+---
+
+## Documentation
+
+| For | Document |
+|-----|----------|
+| **Chat behavior and config** | [docs/chat-advisor.md](docs/chat-advisor.md) |
+| **License exam prep (Coach)** | [docs/coach-license-exams.md](docs/coach-license-exams.md) |
+| **Subscription basics** | [docs/subscription.md](docs/subscription.md) |
+| **Subscription plans and behavior** | [docs/subscription-model.md](docs/subscription-model.md) |
+| **Subscription test matrix** | [docs/subscription-test-cases.md](docs/subscription-test-cases.md) |
+| **Database collections** | [docs/database-schema.md](docs/database-schema.md) |
+| **API reference & coding guide** | [AGENTS.md](AGENTS.md) |
+| **Deploy to AWS App Runner** | [docs/aws-apprunner-ci.md](docs/aws-apprunner-ci.md) |
+
+Technical details (endpoints, APIs, stack, AWS and Cursor rules) are in the docs above.

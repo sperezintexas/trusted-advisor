@@ -5,11 +5,13 @@ package com.atxbogart.trustedadvisor
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
+import org.springframework.scheduling.annotation.EnableScheduling
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 @SpringBootApplication
+@EnableScheduling
 class App
 
 fun main(args: Array<String>) {

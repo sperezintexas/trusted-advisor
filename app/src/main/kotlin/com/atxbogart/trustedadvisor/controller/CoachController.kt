@@ -13,6 +13,7 @@ import com.atxbogart.trustedadvisor.model.PracticeSessionResponse
 import com.atxbogart.trustedadvisor.model.ScoreRequest
 import com.atxbogart.trustedadvisor.model.ScoreResponse
 import com.atxbogart.trustedadvisor.service.CoachService
+import com.atxbogart.trustedadvisor.service.UsageLimitService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.*
 @CrossOrigin(origins = ["http://localhost:3000"])
 class CoachController(
     private val coachService: CoachService,
+    private val usageLimitService: UsageLimitService,
     @Value("\${app.skip-auth:false}") private val skipAuth: Boolean
 ) {
 
@@ -46,9 +48,14 @@ class CoachController(
     @GetMapping("/questions/{examCode}")
     fun getRandomQuestion(
         @PathVariable examCode: String,
-        @RequestParam(required = false) excludeIds: List<String>? = null
+        @RequestParam(required = false) excludeIds: List<String>? = null,
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<CoachQuestion?> {
+        val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
+        if (!skipAuth && usageLimitService.coachUsageStatus(userId).isAtLimit) {
+            return ResponseEntity.status(403).build()
+        }
         return try {
             val q = coachService.getRandomQuestion(code, excludeIds ?: emptyList())
             if (q != null) ResponseEntity.ok(q) else ResponseEntity.notFound().build()
@@ -77,7 +84,7 @@ class CoachController(
         @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<RecordAnswerResponse> {
         val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
-        val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
+        if (parseExamCode(examCode) == null) return ResponseEntity.badRequest().build()
         val ok = coachService.recordAnswer(userId, request.questionId, request.selectedLetter)
         return ResponseEntity.ok(RecordAnswerResponse(correct = ok))
     }
@@ -99,11 +106,24 @@ class CoachController(
     @GetMapping("/exams/{examCode}/practice-session")
     fun getPracticeSession(
         @PathVariable examCode: String,
-        @RequestParam count: Int = 75
+        @RequestParam count: Int = 75,
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
     ): ResponseEntity<PracticeSessionResponse> {
+        val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
         return try {
-            val session = coachService.getPracticeExamQuestions(code, count.coerceIn(1, 200))
+            val requestedCount = count.coerceIn(1, 200)
+            if (!skipAuth) {
+                val usage = usageLimitService.coachUsageStatus(userId)
+                if (usage.isAtLimit) {
+                    return ResponseEntity.status(403).build()
+                }
+                val remaining = usage.remaining
+                val effectiveCount = if (remaining != null) requestedCount.coerceAtMost(remaining) else requestedCount
+                val session = coachService.getPracticeExamQuestions(code, effectiveCount)
+                return ResponseEntity.ok(session)
+            }
+            val session = coachService.getPracticeExamQuestions(code, requestedCount)
             ResponseEntity.ok(session)
         } catch (e: DataAccessException) {
             ResponseEntity.notFound().build()

@@ -6,7 +6,7 @@ Used by the Kotlin backend (Spring Data MongoDB). No validators are applied by d
 
 | Collection | Purpose |
 |------------|---------|
-| **users** | App users (username, xId, displayName, profileImageUrl). Seeded with `atxbogart`; link by logging in with X. |
+| **users** | App users (username, email, xId, displayName, profileImageUrl, role). Role (`BASIC`/`PREMIUM`/`ADMIN`) is used by the subscription model and access control. |
 | **accessRequests** | User access requests (email, displayName, reason, status, oauthProvider, reviewedBy, reviewNote). |
 | **personas** | Custom chat personas (name, systemPrompt, webSearchEnabled, yahooFinanceEnabled). |
 | **personaFiles** | Files attached to personas for context (personaId, sourceType, name, status, chunkCount). |

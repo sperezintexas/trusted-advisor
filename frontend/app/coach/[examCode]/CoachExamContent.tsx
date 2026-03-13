@@ -15,7 +15,7 @@ import type {
 import { EXAM_CONFIG } from '@/types/coach'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 const VALID_EXAM_CODES: ExamCode[] = ['SIE', 'SERIES_7', 'SERIES_57', 'SERIES_65']
@@ -54,6 +54,23 @@ function toSession(raw: unknown): PracticeSessionResponse | null {
   const totalMinutes = typeof o.totalMinutes === 'number' ? o.totalMinutes : 75
   if (questions.length === 0) return null
   return { questions, totalMinutes }
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null
+}
+
+async function getResponseError(res: Response): Promise<string> {
+  try {
+    const data: unknown = await res.json()
+    if (isRecord(data)) {
+      if (typeof data.message === 'string' && data.message.trim()) return data.message
+      if (typeof data.response === 'string' && data.response.trim()) return data.response
+    }
+  } catch {
+    // ignore parse errors and fallback to status-based message
+  }
+  return `Request failed (${res.status})`
 }
 
 function formatTime(seconds: number): string {
@@ -109,6 +126,7 @@ type Phase = 'start' | 'exam' | 'results'
 const PRACTICE_QUESTION_COUNT = 20
 
 export default function CoachExamContent() {
+  const router = useRouter()
   const params = useParams()
   const examCodeParam = typeof params.examCode === 'string' ? params.examCode : ''
   const examCode: ExamCode | null = isExamCode(examCodeParam) ? examCodeParam : null
@@ -147,7 +165,7 @@ export default function CoachExamContent() {
           apiUrl(`/coach/exams/${examCode}/practice-session?count=${count}`),
           defaultFetchOptions()
         )
-      if (!res.ok) throw new Error(res.statusText)
+      if (!res.ok) throw new Error(await getResponseError(res))
       const data = await res.json()
       const sess = toSession(data)
       if (!sess) {
@@ -318,7 +336,7 @@ export default function CoachExamContent() {
         method: 'POST',
         body: JSON.stringify({ message }),
       }))
-      if (!res.ok) throw new Error('Grok request failed')
+      if (!res.ok) throw new Error(await getResponseError(res))
       const data = (await res.json()) as { response?: string }
       const response = typeof data.response === 'string' ? data.response : 'No response.'
       setGrokHints((prev) => ({ ...prev, [qid]: response }))
@@ -328,6 +346,27 @@ export default function CoachExamContent() {
       setGrokHintLoading(false)
     }
   }, [currentQuestion, grokHintLoading, grokHints])
+
+  const handleAskInChat = useCallback(() => {
+    if (!currentQuestion || !examCode) return
+    const selected = answers[currentQuestion.id]
+    const choicesText = currentQuestion.choices
+      .map((c) => `${c.letter}) ${c.text}`)
+      .join('\n')
+    const prompt = [
+      `I'm working on a ${examCode} practice exam question.`,
+      'Please explain the core concepts being tested and walk through any calculations step-by-step if needed.',
+      'Then help me reason to the right approach clearly and briefly.',
+      '',
+      `Question: ${currentQuestion.question}`,
+      '',
+      `Choices:\n${choicesText}`,
+      '',
+      `My selected answer: ${selected ?? '(not selected yet)'}`,
+    ].join('\n')
+
+    router.push(`/chat?q=${encodeURIComponent(prompt)}`)
+  }, [answers, currentQuestion, examCode, router])
 
   if (!examCode) {
     return (
@@ -535,6 +574,13 @@ export default function CoachExamContent() {
                     className="rounded-lg border border-[var(--docs-accent)] bg-[var(--docs-accent)]/10 px-4 py-2 text-sm font-medium text-[var(--docs-accent)] hover:bg-[var(--docs-accent)]/20 disabled:opacity-50"
                   >
                     {grokHintLoading ? 'Asking Grok…' : grokHints[currentQuestion.id] ? 'Grok hint shown' : 'Grok'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAskInChat}
+                    className="rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)]"
+                  >
+                    Ask in Chat
                   </button>
                 </div>
                 {grokHints[currentQuestion.id] && (
