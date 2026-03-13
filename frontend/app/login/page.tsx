@@ -2,11 +2,16 @@
 
 import AppHeader from '../components/AppHeader'
 import { isAuthDebugEnabled, authDebugLog, checkSessionStatus } from '@/lib/auth'
-import { apiUrl, getBackendUrl, defaultFetchOptions } from '@/lib/api'
-import { useEffect } from 'react'
+import { apiUrl, getBackendUrl, defaultFetchOptions, setStoredApiKey } from '@/lib/api'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const debugOn = isAuthDebugEnabled()
+  const [apiKey, setApiKey] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     if (!debugOn) return
@@ -25,6 +30,35 @@ export default function LoginPage() {
       .catch(() => authDebugLog('Backend /api/debug/auth', 'request failed'))
   }, [debugOn])
 
+  async function handleApiKeyLogin(e: React.FormEvent) {
+    e.preventDefault()
+    if (!apiKey.trim()) {
+      setError('Please enter an API key')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    // Store the API key
+    setStoredApiKey(apiKey.trim())
+
+    // Verify it works by calling /me
+    try {
+      const res = await fetch(apiUrl('/me'), defaultFetchOptions())
+      if (res.ok) {
+        authDebugLog('API key login successful')
+        router.push('/chat')
+      } else {
+        setError('Invalid API key')
+        setLoading(false)
+      }
+    } catch (err) {
+      setError('Connection error')
+      setLoading(false)
+    }
+  }
+
   function loginWithGoogle() {
     window.location.href = `${getBackendUrl()}/oauth2/authorization/google`
   }
@@ -42,10 +76,45 @@ export default function LoginPage() {
             Sign in
           </h1>
           <p className="mt-2 text-sm text-[var(--docs-muted)]">
-            Sign in with your Google or GitHub account. Only emails pre-approved
-            in the system can access Trusted Advisor.
+            Enter your API key to access Trusted Advisor.
           </p>
+          
+          <form onSubmit={handleApiKeyLogin} className="mt-6">
+            <div>
+              <label htmlFor="apiKey" className="block text-sm font-medium text-[var(--docs-text)] mb-2">
+                API Key
+              </label>
+              <input
+                type="password"
+                id="apiKey"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="w-full rounded-lg border border-[var(--docs-border)] bg-white px-4 py-3 text-sm text-[var(--docs-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2"
+                placeholder="Enter your API key"
+                disabled={loading}
+              />
+            </div>
+            {error && (
+              <p className="mt-2 text-sm text-red-600">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-4 w-full rounded-lg bg-[var(--docs-accent)] px-4 py-3 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2 disabled:opacity-50"
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+
           <div className="mt-6 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[var(--docs-border)]"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-white px-2 text-[var(--docs-muted)]">Or continue with</span>
+              </div>
+            </div>
             <button
               type="button"
               onClick={loginWithGoogle}
