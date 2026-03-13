@@ -1,6 +1,8 @@
-# Trusted Advisor
+# Trusted Advisor (fintechadvisor.ai)
 
 Trusted Advisor is an AI-powered coaching platform for financial exam prep and professional decision support. It combines expert personas, live intelligence, and structured practice workflows to help people learn faster, make better decisions, and perform with confidence.
+
+Official domain: [fintechadvisor.ai](https://fintechadvisor.ai)
 
 ---
 
@@ -72,6 +74,16 @@ Trusted Advisor supports two plan tiers:
 - Full or practice exams as often as needed
 - Unlimited coach questions
 - Unlimited chat questions
+
+---
+
+## Monetization
+
+Trusted Advisor monetizes through a freemium subscription model on `fintechadvisor.ai`:
+
+- `BASIC` keeps onboarding friction low with free access and capped usage.
+- `PREMIUM` unlocks unlimited chat and unlimited exam practice for paying users.
+- Access-request and admin approval workflows support controlled user acquisition and conversion.
 
 ---
 
