@@ -14,6 +14,22 @@ class PersonaService(private val repository: PersonaRepository) {
 
     fun findById(id: String) = repository.findById(id).orElse(null)
 
+    /**
+     * Default persona for coach/exam question workflows.
+     * Prefer explicit finance-coach id/name, then finance expert fallback.
+     */
+    fun findDefaultCoachPersona(): Persona? {
+        val personas = repository.findAll()
+        return personas.firstOrNull { it.id.equals("finance-coach", ignoreCase = true) }
+            ?: personas.firstOrNull { it.name.equals("finance-coach", ignoreCase = true) }
+            ?: personas.firstOrNull { it.name.equals("finance coach", ignoreCase = true) }
+            ?: personas.firstOrNull { it.name.equals("finance expert", ignoreCase = true) }
+            ?: personas.firstOrNull {
+                val n = it.name.lowercase()
+                n.contains("finance") && n.contains("coach")
+            }
+    }
+
     fun save(persona: Persona): Persona = 
         repository.save(persona.copy(updatedAt = LocalDateTime.now(ZoneOffset.UTC)))
 
@@ -25,7 +41,8 @@ class PersonaService(private val repository: PersonaRepository) {
             if (repository.count() > 0L) return
             val predefined = listOf(
                 Persona(
-                    name = "Finance Expert",
+                    id = "finance-coach",
+                    name = "Finance Coach",
                     description = "Investment and options trading advisor",
                     systemPrompt = "You are a senior finance expert specializing in stock/options strategies, risk management, and market analysis. Be direct, data-driven. Use enabled tools for live data when available.",
                     webSearchEnabled = true,

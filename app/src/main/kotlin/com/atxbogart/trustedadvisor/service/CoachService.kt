@@ -3,12 +3,14 @@ package com.atxbogart.trustedadvisor.service
 import com.atxbogart.trustedadvisor.config.ExamTopicWeights
 import com.atxbogart.trustedadvisor.model.*
 import com.atxbogart.trustedadvisor.repository.CoachExamAttemptRepository
+import com.atxbogart.trustedadvisor.repository.CoachExamDailyCacheRepository
 import com.atxbogart.trustedadvisor.repository.CoachExamRepository
 import com.atxbogart.trustedadvisor.repository.CoachQuestionRepository
 import com.atxbogart.trustedadvisor.repository.CoachUserProgressRepository
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
@@ -17,9 +19,24 @@ class CoachService(
     private val examRepository: CoachExamRepository,
     private val questionRepository: CoachQuestionRepository,
     private val progressRepository: CoachUserProgressRepository,
-    private val examAttemptRepository: CoachExamAttemptRepository
+    private val examAttemptRepository: CoachExamAttemptRepository,
+    private val examDailyCacheRepository: CoachExamDailyCacheRepository
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    data class ScoreEvaluationResult(
+        val score: ScoreResponse,
+        val missedTopics: List<String>
+    )
+
+    data class FullExamCacheStatus(
+        val examCode: ExamCode,
+        val expectedQuestionCount: Int,
+        val hasTodayCache: Boolean,
+        val cacheDate: String?,
+        val questionCount: Int?,
+        val generatedAt: String?
+    )
 
     fun getExams(): List<CoachExam> = examRepository.findAll()
 
@@ -99,11 +116,76 @@ class CoachService(
      * Pools questions by topic and selects according to ExamTopicWeights; fills shortfall from any remaining.
      */
     fun getPracticeExamQuestions(examCode: ExamCode, count: Int): PracticeSessionResponse {
-        val pool = questionRepository.findByExamCodeAndActiveTrue(examCode)
-            .filter { it.id != null }
-        if (pool.isEmpty()) {
+        val expectedFullCount = expectedFullExamQuestionCount(examCode)
+        val requestedCount = count.coerceIn(1, 200)
+        val shouldUseDailyCache = requestedCount >= expectedFullCount
+
+        if (shouldUseDailyCache) {
+            val today = LocalDate.now(ZoneOffset.UTC).toString()
+            val cached = examDailyCacheRepository.findByExamCodeAndCacheDate(examCode, today)
+            if (cached != null) {
+                val byId = questionRepository.findByExamCodeAndActiveTrue(examCode)
+                    .filter { it.id != null }
+                    .associateBy { it.id!! }
+                val cachedQuestions = cached.questionIds.mapNotNull { byId[it] }
+                if (cachedQuestions.isNotEmpty()) {
+                    return toPracticeSessionResponse(examCode, cachedQuestions)
+                }
+                log.warn("Coach full-exam cache exists for {} on {} but has no resolvable questions", examCode, today)
+            }
+
+            val generated = buildPracticeQuestions(examCode, expectedFullCount)
+            val cacheId = "full-exam-${examCode.name.lowercase()}-$today"
+            examDailyCacheRepository.save(
+                CoachExamDailyCache(
+                    id = cacheId,
+                    examCode = examCode,
+                    cacheDate = today,
+                    questionIds = generated.mapNotNull { it.id }
+                )
+            )
+            return toPracticeSessionResponse(examCode, generated)
+        }
+
+        val selected = buildPracticeQuestions(examCode, requestedCount)
+        if (selected.isEmpty()) {
             return PracticeSessionResponse(questions = emptyList(), totalMinutes = getExamTimeLimitMinutes(examCode))
         }
+        return toPracticeSessionResponse(examCode, selected)
+    }
+
+    fun getFullExamCacheStatuses(): List<FullExamCacheStatus> {
+        val today = LocalDate.now(ZoneOffset.UTC).toString()
+        return getExams()
+            .sortedBy { it.code.name }
+            .map { exam ->
+                val todayCache = examDailyCacheRepository.findByExamCodeAndCacheDate(exam.code, today)
+                val latest = todayCache ?: examDailyCacheRepository.findTop1ByExamCodeOrderByGeneratedAtDesc(exam.code)
+                FullExamCacheStatus(
+                    examCode = exam.code,
+                    expectedQuestionCount = exam.totalQuestionsInOutline,
+                    hasTodayCache = todayCache != null,
+                    cacheDate = latest?.cacheDate,
+                    questionCount = latest?.questionIds?.size,
+                    generatedAt = latest?.generatedAt?.toString()
+                )
+            }
+    }
+
+    private fun expectedFullExamQuestionCount(examCode: ExamCode): Int {
+        return examRepository.findByCode(examCode)?.totalQuestionsInOutline ?: when (examCode) {
+            ExamCode.SIE -> 75
+            ExamCode.SERIES_7 -> 125
+            ExamCode.SERIES_57 -> 50
+            ExamCode.SERIES_65 -> 130
+        }
+    }
+
+    private fun buildPracticeQuestions(examCode: ExamCode, count: Int): List<CoachQuestion> {
+        val pool = questionRepository.findByExamCodeAndActiveTrue(examCode)
+            .filter { it.id != null }
+        if (pool.isEmpty()) return emptyList()
+
         val byTopic = pool.groupBy { q -> q.topic ?: "Other" }
         val targetByTopic = ExamTopicWeights.targetCountsByTopic(examCode, count)
         val selected = mutableSetOf<String>()
@@ -116,17 +198,21 @@ class CoachService(
                 q.id?.let { selected.add(it); result.add(q) }
             }
         }
-        var needMore = count - result.size
+        val needMore = count - result.size
         if (needMore > 0) {
             val remaining = pool.filter { it.id !in selected }.shuffled()
             remaining.take(needMore).forEach { q ->
                 q.id?.let { selected.add(it); result.add(q) }
             }
         }
-        val finalList = result.take(count)
-        val dtos = finalList.map { q ->
+        return result.take(count)
+    }
+
+    private fun toPracticeSessionResponse(examCode: ExamCode, questions: List<CoachQuestion>): PracticeSessionResponse {
+        val dtos = questions.mapNotNull { q ->
+            val id = q.id ?: return@mapNotNull null
             PracticeExamQuestion(
-                id = q.id!!,
+                id = id,
                 question = q.question,
                 choices = q.choices
             )
@@ -138,26 +224,47 @@ class CoachService(
     }
 
     fun scorePracticeExam(examCode: ExamCode, answers: List<ScoreAnswerRequest>): ScoreResponse {
+        return scorePracticeExamDetailed(examCode, answers).score
+    }
+
+    fun scorePracticeExamDetailed(examCode: ExamCode, answers: List<ScoreAnswerRequest>): ScoreEvaluationResult {
         val passingPct = getPassingPercentage(examCode)
         var correct = 0
+        val missedTopicCounts = linkedMapOf<String, Int>()
         for (a in answers) {
             val letter = parseChoiceLetter(a.selectedLetter) ?: continue
             val question = questionRepository.findById(a.questionId).orElse(null) ?: continue
-            if (question.examCode == examCode && question.correctLetter == letter) correct++
+            if (question.examCode != examCode) continue
+            if (question.correctLetter == letter) {
+                correct++
+            } else {
+                val topic = question.topic?.takeIf { it.isNotBlank() } ?: "General review"
+                missedTopicCounts[topic] = (missedTopicCounts[topic] ?: 0) + 1
+            }
         }
         val total = answers.size
         val percentage = if (total == 0) 0.0 else (correct * 100.0) / total
-        return ScoreResponse(
+        val score = ScoreResponse(
             correct = correct,
             total = total,
             percentage = percentage,
             passed = percentage >= passingPct,
             passingPercentage = passingPct
         )
+        val missedTopics = missedTopicCounts.entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+        return ScoreEvaluationResult(score = score, missedTopics = missedTopics)
     }
 
     /** Persists exam attempt and updates user progress. Call only when user completes and submits (not on cancel). */
-    fun savePracticeExamResult(userId: String, examCode: ExamCode, score: ScoreResponse) {
+    fun savePracticeExamResult(
+        userId: String,
+        examCode: ExamCode,
+        score: ScoreResponse,
+        missedTopics: List<String> = emptyList(),
+        recommendationStatus: RecommendationStatus = RecommendationStatus.NONE
+    ) {
         val now = LocalDateTime.now(ZoneOffset.UTC)
         examAttemptRepository.save(
             CoachExamAttempt(
@@ -167,6 +274,8 @@ class CoachService(
                 total = score.total,
                 percentage = score.percentage,
                 passed = score.passed,
+                missedTopics = missedTopics,
+                recommendationStatus = recommendationStatus,
                 completedAt = now,
                 createdAt = now
             )

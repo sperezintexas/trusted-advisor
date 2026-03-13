@@ -2,6 +2,7 @@ package com.atxbogart.trustedadvisor.repository
 
 import com.atxbogart.trustedadvisor.model.CoachExamAttempt
 import com.atxbogart.trustedadvisor.model.ExamCode
+import com.atxbogart.trustedadvisor.model.RecommendationStatus
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.stereotype.Repository
 
@@ -9,4 +10,7 @@ import org.springframework.stereotype.Repository
 interface CoachExamAttemptRepository : MongoRepository<CoachExamAttempt, String> {
     fun findByUserIdOrderByCompletedAtDesc(userId: String): List<CoachExamAttempt>
     fun findByUserIdAndExamCodeOrderByCompletedAtDesc(userId: String, examCode: ExamCode): List<CoachExamAttempt>
+    fun findTop10ByRecommendationStatusOrderByCompletedAtAsc(status: RecommendationStatus): List<CoachExamAttempt>
+    fun countByRecommendationStatus(status: RecommendationStatus): Long
+    fun findTop20ByRecommendationStatusInOrderByCompletedAtDesc(statuses: List<RecommendationStatus>): List<CoachExamAttempt>
 }

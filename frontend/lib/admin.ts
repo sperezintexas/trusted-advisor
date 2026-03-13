@@ -311,6 +311,55 @@ export type GenerateQuestionsResponse = {
   questions: GeneratedQuestionView[]
 }
 
+export type CoachGenerationConfigView = {
+  examCode: 'SIE' | 'SERIES_7' | 'SERIES_57' | 'SERIES_65' | string
+  enabled: boolean
+  personaId: string
+  targetPoolSize: number
+  intervalMinutes: number
+  chunkSize: number
+  currentPoolSize: number
+  nextRunAt: string
+  lastRunAt: string | null
+  running: boolean
+  lastStatus: string | null
+  lastMessage: string | null
+}
+
+export type CoachGenerationConfigListResponse = {
+  configs: CoachGenerationConfigView[]
+}
+
+export type RecommendationJobView = {
+  attemptId: string
+  userId: string
+  examCode: string
+  recommendationStatus: 'QUEUED' | 'PROCESSING' | 'FAILED' | 'READY' | 'NONE' | string
+  recommendationAttempts: number
+  percentage: number
+  completedAt: string
+  recommendationUpdatedAt: string | null
+  recommendationError: string | null
+}
+
+export type AdminJobsOverviewResponse = {
+  recommendationQueue: {
+    queued: number
+    processing: number
+    failed: number
+    ready: number
+    recent: RecommendationJobView[]
+  }
+  fullExamCache: Array<{
+    examCode: string
+    expectedQuestionCount: number
+    hasTodayCache: boolean
+    cacheDate: string | null
+    questionCount: number | null
+    generatedAt: string | null
+  }>
+}
+
 export async function generatePersonaQuestions(
   personaId: string,
   count: number,
@@ -344,5 +393,88 @@ export async function generatePersonaQuestions(
       message: e instanceof Error ? e.message : 'Request failed',
       questions: [],
     }
+  }
+}
+
+export async function fetchCoachGenerationConfigs(): Promise<CoachGenerationConfigListResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/admin/coach/generation/configs'), defaultFetchOptions())
+    if (!res.ok) return null
+    return (await res.json()) as CoachGenerationConfigListResponse
+  } catch {
+    return null
+  }
+}
+
+export async function updateCoachGenerationConfig(
+  examCode: string,
+  input: {
+    enabled?: boolean
+    personaId?: string
+    targetPoolSize?: number
+    intervalMinutes?: number
+  }
+): Promise<CoachGenerationConfigView | null> {
+  try {
+    const res = await fetch(apiUrl(`/admin/coach/generation/configs/${examCode}`), {
+      ...defaultFetchOptions(),
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) return null
+    return (await res.json()) as CoachGenerationConfigView
+  } catch {
+    return null
+  }
+}
+
+export async function runCoachGenerationNow(
+  examCode: string
+): Promise<CoachGenerationConfigView | null> {
+  try {
+    const res = await fetch(apiUrl(`/admin/coach/generation/configs/${examCode}/run`), {
+      ...defaultFetchOptions(),
+      method: 'POST',
+    })
+    if (!res.ok) return null
+    return (await res.json()) as CoachGenerationConfigView
+  } catch {
+    return null
+  }
+}
+
+export async function runAllCoachGenerationNow(): Promise<CoachGenerationConfigListResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/admin/coach/generation/configs/run-all'), {
+      ...defaultFetchOptions(),
+      method: 'POST',
+    })
+    if (!res.ok) return null
+    return (await res.json()) as CoachGenerationConfigListResponse
+  } catch {
+    return null
+  }
+}
+
+export async function fetchAdminJobsOverview(): Promise<AdminJobsOverviewResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/admin/jobs/overview'), defaultFetchOptions())
+    if (!res.ok) return null
+    return (await res.json()) as AdminJobsOverviewResponse
+  } catch {
+    return null
+  }
+}
+
+export async function retryRecommendationJob(attemptId: string): Promise<AdminActionResponse | null> {
+  try {
+    const res = await fetch(apiUrl(`/admin/jobs/recommendations/${attemptId}/retry`), {
+      ...defaultFetchOptions(),
+      method: 'POST',
+    })
+    if (!res.ok) return null
+    return (await res.json()) as AdminActionResponse
+  } catch {
+    return null
   }
 }

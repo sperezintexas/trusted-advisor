@@ -11,9 +11,9 @@ import java.time.ZoneOffset
 @Service
 class ChatService(
     private val personaService: PersonaService,
-    private val personaFileService: PersonaFileService,
     private val chatHistoryRepository: ChatHistoryRepository,
-    private val grokService: GrokService,
+    private val agentOrchestratorService: AgentOrchestratorService,
+    private val chatConfigService: ChatConfigService,
     private val userRepository: UserRepository,
     private val planLimitService: PlanLimitService,
     private val tokenUsageService: TokenUsageService
@@ -33,25 +33,37 @@ class ChatService(
         }
 
         val history = chatHistoryRepository.findByUserId(request.userId)?.messages ?: mutableListOf()
+        val isCoachRequest = shouldUseDefaultCoachPersona(request.message)
 
-        val persona = request.personaId?.let { personaService.findById(it) }
+        val requestedPersona = request.personaId?.let { personaService.findById(it) }
+        val defaultCoachPersona = if (requestedPersona == null && isCoachRequest) {
+            personaService.findDefaultCoachPersona()
+        } else {
+            null
+        }
+        val persona = requestedPersona ?: defaultCoachPersona
+        val effectivePersonaId = request.personaId ?: defaultCoachPersona?.id
         val basePrompt = persona?.systemPrompt
             ?: "You are a helpful trusted advisor. Use provided context."
 
-        val fileContext = request.personaId?.let {
-            personaFileService.getFileContext(it, limits.maxFileContextTokens)
-        } ?: ""
-
-        val toolsSuffix = buildToolsAwarenessSuffix(
-            webSearchEnabled = persona?.webSearchEnabled ?: true,
-            yahooFinanceEnabled = persona?.yahooFinanceEnabled ?: true
+        val config = chatConfigService.getConfig()
+        val baseToolPolicy = ToolExecutionPolicy(
+            webSearchEnabled = (persona?.webSearchEnabled ?: true) && (config.tools["webSearch"] ?: true),
+            yahooFinanceEnabled = (persona?.yahooFinanceEnabled ?: true) && (config.tools["yahooFinance"] ?: true),
+            internalActionsEnabled = config.tools["internalActions"] ?: true
         )
-
-        val systemPrompt = buildSystemPrompt(basePrompt, fileContext, toolsSuffix)
-
-        if (fileContext.isNotEmpty()) {
-            log.debug("[chat] Including {} chars of file context for persona {}", fileContext.length, request.personaId)
+        // Coach/exam flows rely on curated persona RAG content by default (no live web/finance tools).
+        val toolPolicy = if (isCoachRequest) {
+            baseToolPolicy.copy(
+                webSearchEnabled = false,
+                yahooFinanceEnabled = false
+            )
+        } else {
+            baseToolPolicy
         }
+        val toolsSuffix = buildToolsAwarenessSuffix(toolPolicy)
+
+        val systemPrompt = buildSystemPrompt(basePrompt, toolsSuffix)
 
         val trimmedHistory = history.takeLast(limits.maxHistoryMessages)
         val messages = trimToPromptBudget(
@@ -61,14 +73,19 @@ class ChatService(
             maxPromptTokens = limits.maxPromptTokens
         )
 
-        val grokReq = GrokRequest(
-            messages = messages,
-            max_tokens = limits.maxOutputTokens
+        val orchestrated = agentOrchestratorService.orchestrate(
+            AgentOrchestratorRequest(
+                userMessage = request.message,
+                personaId = effectivePersonaId,
+                systemPrompt = systemPrompt,
+                history = trimmedHistory,
+                maxOutputTokens = limits.maxOutputTokens,
+                toolPolicy = toolPolicy
+            )
         )
-        val grokResponse = grokService.chat(grokReq)
-        val responseContent = grokResponse.choices.getOrNull(0)?.message?.content ?: ""
+        val responseContent = orchestrated.response
 
-        val consumedTokens = grokResponse.usage?.total_tokens?.toLong()
+        val consumedTokens = orchestrated.usage?.total_tokens?.toLong()
             ?: estimateTokens(messages.sumOf { it.content.length } + responseContent.length).toLong()
         val usedTodayAfter = tokenUsageService.addTodayUsage(request.userId, consumedTokens)
         if (usedTodayAfter > limits.dailyTokenLimit) {
@@ -88,7 +105,12 @@ class ChatService(
             ?: ChatHistory(userId = request.userId, messages = history.toMutableList())
         chatHistoryRepository.save(chatHistory.copy(updatedAt = LocalDateTime.now(ZoneOffset.UTC)))
 
-        return ChatResponse(response = responseContent, usage = grokResponse.usage)
+        return ChatResponse(
+            response = responseContent,
+            usage = orchestrated.usage,
+            citations = orchestrated.citations,
+            toolEvents = orchestrated.toolEvents
+        )
     }
 
     fun getChatLimits(userId: String): ChatLimitsView {
@@ -146,18 +168,8 @@ class ChatService(
 
     private fun estimateTokens(charCount: Int): Int = (charCount / 4.0).toInt()
 
-    private fun buildSystemPrompt(basePrompt: String, fileContext: String, toolsSuffix: String): String {
+    private fun buildSystemPrompt(basePrompt: String, toolsSuffix: String): String {
         val parts = mutableListOf(basePrompt)
-
-        if (fileContext.isNotEmpty()) {
-            parts.add("""
-                |
-                |## Reference Documents
-                |The following documents have been attached to provide context. Use this information to answer questions accurately:
-                |
-                |$fileContext
-            """.trimMargin())
-        }
 
         if (toolsSuffix.isNotBlank()) {
             parts.add(toolsSuffix)
@@ -166,16 +178,31 @@ class ChatService(
         return parts.joinToString("\n\n")
     }
 
-    private fun buildToolsAwarenessSuffix(
-        webSearchEnabled: Boolean,
-        yahooFinanceEnabled: Boolean
-    ): String {
+    private fun shouldUseDefaultCoachPersona(message: String): Boolean {
+        val normalized = message.lowercase()
+        return listOf(
+            "coach",
+            "exam question",
+            "practice question",
+            "sie",
+            "series 7",
+            "series 57",
+            "series 65",
+            "finra",
+            "nasaa"
+        ).any { normalized.contains(it) }
+    }
+
+    private fun buildToolsAwarenessSuffix(toolPolicy: ToolExecutionPolicy): String {
         val parts = mutableListOf<String>()
-        if (webSearchEnabled) {
+        if (toolPolicy.webSearchEnabled) {
             parts.add("web_search (for current news, earnings, events, real-time facts)")
         }
-        if (yahooFinanceEnabled) {
+        if (toolPolicy.yahooFinanceEnabled) {
             parts.add("yahoo-finance (for live quotes, options chains, market data)")
+        }
+        if (toolPolicy.internalActionsEnabled) {
+            parts.add("internal metadata tools (for persona metadata and coach exam pool stats)")
         }
         if (parts.isEmpty()) return ""
         return "Live data: You have access to ${parts.joinToString(" and ")}. " +

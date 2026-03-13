@@ -10,6 +10,7 @@ import com.atxbogart.trustedadvisor.model.CoachQuestion
 import com.atxbogart.trustedadvisor.model.CoachUserProgress
 import com.atxbogart.trustedadvisor.model.ExamCode
 import com.atxbogart.trustedadvisor.model.PracticeSessionResponse
+import com.atxbogart.trustedadvisor.model.RecommendationStatus
 import com.atxbogart.trustedadvisor.model.ScoreRequest
 import com.atxbogart.trustedadvisor.model.ScoreResponse
 import com.atxbogart.trustedadvisor.service.CoachService
@@ -176,9 +177,21 @@ class CoachController(
         val userId = userIdOrUnauthorized(principal) ?: return ResponseEntity.status(401).build()
         val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
         return try {
-            val score = coachService.scorePracticeExam(code, request.answers)
+            val evaluation = coachService.scorePracticeExamDetailed(code, request.answers)
+            val recommendationStatus = if (request.save == true) RecommendationStatus.QUEUED else null
+            val score = evaluation.score.copy(
+                recommendation = null,
+                recommendationStatus = recommendationStatus,
+                recommendationJobSubmitted = request.save == true
+            )
             if (request.save == true) {
-                coachService.savePracticeExamResult(userId, code, score)
+                coachService.savePracticeExamResult(
+                    userId = userId,
+                    examCode = code,
+                    score = score,
+                    missedTopics = evaluation.missedTopics,
+                    recommendationStatus = RecommendationStatus.QUEUED
+                )
             }
             ResponseEntity.ok(score)
         } catch (e: DataAccessException) {
@@ -207,7 +220,7 @@ class CoachController(
 
     private fun currentEmailFromOAuth2(): String? {
         val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
-        val principal = auth.principal as? OAuth2User ?: return null
+        val principal = auth.principal
         val attrs = principal.attributes
         return (attrs["email"] as? String)
             ?: (attrs["login"] as? String)?.let { "$it@github.local" }

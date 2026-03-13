@@ -91,7 +91,23 @@ export type ScoreResponse = {
   percentage: number
   passed: boolean
   passingPercentage: number
+  recommendation?: LearningPlanRecommendation
+  recommendationStatus?: RecommendationStatus
+  recommendationJobSubmitted?: boolean
 }
+
+export type LearningPlanRecommendation = {
+  summary: string
+  suggestedTopics: string[]
+  proposedLearningPlan: string[]
+}
+
+export type RecommendationStatus =
+  | 'NONE'
+  | 'QUEUED'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED'
 
 export type CoachExamAttempt = {
   id: string
@@ -101,6 +117,8 @@ export type CoachExamAttempt = {
   total: number
   percentage: number
   passed: boolean
+  recommendationStatus?: RecommendationStatus
+  recommendation?: LearningPlanRecommendation
   completedAt: string
   createdAt: string
 }
