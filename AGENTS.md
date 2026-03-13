@@ -125,3 +125,5 @@ Standard lint/typecheck/test commands are documented in section 4. No backend un
 - The `.env` file lives at the **repo root** and is shared by both services. The backend's `bootRun` task sets `workingDir` to the repo root so spring-dotenv picks it up; Next.js loads `../.env` via `next.config.mjs`.
 - Frontend must be installed with `--legacy-peer-deps` due to peer dependency conflicts.
 - There is no `package-lock.json` committed for the frontend; CI uses `npm ci` with a cache path that expects one, but local dev uses `npm install`.
+- If the `MONGODB_URI` secret is injected as a **base64-encoded** string, place it in `MONGODB_URI_B64` (not `MONGODB_URI`). The backend's `App.kt` decodes it at startup. Using the wrong field silently connects to localhost instead of the intended remote cluster.
+- Local MongoDB is only needed when no remote `MONGODB_URI` / `MONGODB_URI_B64` is configured. Start it with `sudo mongod --dbpath /data/db --fork --logpath /var/log/mongodb/mongod.log`.
