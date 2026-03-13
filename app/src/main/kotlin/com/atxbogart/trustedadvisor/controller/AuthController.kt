@@ -7,6 +7,7 @@ import com.atxbogart.trustedadvisor.model.UserRole
 import com.atxbogart.trustedadvisor.repository.UserRepository
 import com.atxbogart.trustedadvisor.service.AccessRequestResult
 import com.atxbogart.trustedadvisor.service.AccessRequestService
+import com.atxbogart.trustedadvisor.service.SubscriptionPolicy
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -227,11 +228,7 @@ class AuthController(
         val existing = userRepository.findByEmail(email)
             ?: return ResponseEntity.status(403).build()
 
-        val requestedRole = when (body.tier.uppercase()) {
-            "PREMIUM" -> UserRole.PREMIUM
-            "ADMIN" -> if (existing.role == UserRole.ADMIN) UserRole.ADMIN else existing.role
-            else -> UserRole.BASIC
-        }
+        val requestedRole = SubscriptionPolicy.resolveUserRole(existing.role, body.tier)
 
         val now = LocalDateTime.now(ZoneOffset.UTC)
         val updated: User = existing.copy(
@@ -255,6 +252,22 @@ class AuthController(
                     displayName = saved.displayName,
                     role = saved.role.name
                 )
+            )
+        )
+    }
+
+    @GetMapping("/auth/subscription/plans")
+    fun subscriptionPlans(): ResponseEntity<SubscriptionPlansResponse> {
+        return ResponseEntity.ok(
+            SubscriptionPlansResponse(
+                plans = SubscriptionPolicy.availablePlans().map {
+                    SubscriptionPlanView(
+                        tier = it.tier.name,
+                        displayName = it.displayName,
+                        monthlyPriceUsd = it.monthlyPriceUsd,
+                        features = it.features
+                    )
+                }
             )
         )
     }
@@ -316,4 +329,15 @@ data class OAuth2Info(
     val provider: String?,
     val displayName: String?,
     val profileImageUrl: String?
+)
+
+data class SubscriptionPlanView(
+    val tier: String,
+    val displayName: String,
+    val monthlyPriceUsd: String,
+    val features: List<String>
+)
+
+data class SubscriptionPlansResponse(
+    val plans: List<SubscriptionPlanView>
 )

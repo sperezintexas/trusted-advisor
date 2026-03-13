@@ -10,6 +10,7 @@ import com.atxbogart.trustedadvisor.service.ChatConfigService
 import com.atxbogart.trustedadvisor.service.ChatService
 import com.atxbogart.trustedadvisor.service.GrokTestResult
 import com.atxbogart.trustedadvisor.service.GrokService
+import com.atxbogart.trustedadvisor.service.UsageLimitService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DataAccessException
 import org.springframework.http.ResponseEntity
@@ -26,6 +27,7 @@ class ChatController(
     private val chatService: ChatService,
     private val chatConfigService: ChatConfigService,
     private val grokService: GrokService,
+    private val usageLimitService: UsageLimitService,
     @Value("\${app.skip-auth:false}") private val skipAuth: Boolean
 ) {
 
@@ -33,10 +35,19 @@ class ChatController(
     fun chat(
         @RequestBody request: ChatRequest,
         @AuthenticationPrincipal principal: ApiKeyPrincipal?
-    ): ResponseEntity<ChatResponse> {
+    ): ResponseEntity<Any> {
         val userId = principal?.userId
             ?: currentEmailFromOAuth2()
             ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
+        if (!skipAuth) {
+            val chatUsage = usageLimitService.chatUsageStatus(userId)
+            if (chatUsage.isAtLimit) {
+                val limit = chatUsage.limit ?: UsageLimitService.BASIC_CHAT_QUESTION_LIMIT
+                return ResponseEntity.status(403).body(
+                    ErrorResponse("Chat limit reached for BASIC plan ($limit questions). Upgrade to PREMIUM for unlimited chat.")
+                )
+            }
+        }
         val scopedRequest = request.copy(userId = userId)
         return ResponseEntity.ok(chatService.sendMessage(scopedRequest))
     }

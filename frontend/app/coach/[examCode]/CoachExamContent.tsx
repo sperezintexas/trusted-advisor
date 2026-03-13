@@ -56,6 +56,23 @@ function toSession(raw: unknown): PracticeSessionResponse | null {
   return { questions, totalMinutes }
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null
+}
+
+async function getResponseError(res: Response): Promise<string> {
+  try {
+    const data: unknown = await res.json()
+    if (isRecord(data)) {
+      if (typeof data.message === 'string' && data.message.trim()) return data.message
+      if (typeof data.response === 'string' && data.response.trim()) return data.response
+    }
+  } catch {
+    // ignore parse errors and fallback to status-based message
+  }
+  return `Request failed (${res.status})`
+}
+
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
@@ -147,7 +164,7 @@ export default function CoachExamContent() {
           apiUrl(`/coach/exams/${examCode}/practice-session?count=${count}`),
           defaultFetchOptions()
         )
-      if (!res.ok) throw new Error(res.statusText)
+      if (!res.ok) throw new Error(await getResponseError(res))
       const data = await res.json()
       const sess = toSession(data)
       if (!sess) {
@@ -318,7 +335,7 @@ export default function CoachExamContent() {
         method: 'POST',
         body: JSON.stringify({ message }),
       }))
-      if (!res.ok) throw new Error('Grok request failed')
+      if (!res.ok) throw new Error(await getResponseError(res))
       const data = (await res.json()) as { response?: string }
       const response = typeof data.response === 'string' ? data.response : 'No response.'
       setGrokHints((prev) => ({ ...prev, [qid]: response }))

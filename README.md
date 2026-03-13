@@ -30,16 +30,29 @@ A conversational AI assistant powered by **xAI Grok**, with expert personas and 
 
 ---
 
-## Get started (local with .env)
+## Subscription basics
 
-1. Copy `.env.example` to `.env` and set **AUTH_SECRET** (login password), **XAI_API_KEY**, and **MONGODB_URI** (or **MONGODB_URI_B64**) for your remote Mongo.
-2. **Backend:** from repo root run `./gradlew bootRun`
-3. **Frontend:** `cd frontend && npm install --legacy-peer-deps && npm run dev`
-4. Open **http://localhost:3000** and sign in with your AUTH_SECRET value.
+Trusted Advisor supports two plan tiers:
 
-Chat, Personas, Config, and Coach (including full practice exams) all work. The frontend proxies `/api` to the backend.
+- `BASIC` - free tier
+- `PREMIUM` - paid tier (`$9.99/month`)
 
-**Docker:** optional — `docker compose up --build` runs both; see [DEVELOPMENT.md](DEVELOPMENT.md) for details and troubleshooting.
+### BASIC includes
+
+- Exam Coach access
+- Practice exams
+- Basic chat
+- Up to 30 coach questions total
+- Up to 10 chat questions total
+
+### PREMIUM includes
+
+- Everything in BASIC
+- AI Tutor sessions
+- Priority support
+- Full or practice exams as often as needed
+- Unlimited coach questions
+- Unlimited chat questions
 
 ---
 
@@ -47,9 +60,11 @@ Chat, Personas, Config, and Coach (including full practice exams) all work. The 
 
 | For | Document |
 |-----|----------|
-| **Setup, run, build, test** | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | **Chat behavior and config** | [docs/chat-advisor.md](docs/chat-advisor.md) |
 | **License exam prep (Coach)** | [docs/coach-license-exams.md](docs/coach-license-exams.md) |
+| **Subscription basics** | [docs/subscription.md](docs/subscription.md) |
+| **Subscription plans and behavior** | [docs/subscription-model.md](docs/subscription-model.md) |
+| **Subscription test matrix** | [docs/subscription-test-cases.md](docs/subscription-test-cases.md) |
 | **Database collections** | [docs/database-schema.md](docs/database-schema.md) |
 | **API reference & coding guide** | [AGENTS.md](AGENTS.md) |
 | **Deploy to AWS App Runner** | [docs/aws-apprunner-ci.md](docs/aws-apprunner-ci.md) |
