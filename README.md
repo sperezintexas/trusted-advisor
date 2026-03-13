@@ -51,29 +51,27 @@ Official domain: [fintechadvisor.ai](https://fintechadvisor.ai)
 
 ---
 
-## Subscription basics
+## Subscription
 
-Trusted Advisor supports two plan tiers:
+Trusted Advisor supports two plans:
 
-- `BASIC` - free tier
-- `PREMIUM` - paid tier (`$9.99/month`)
+| Feature | BASIC (Free) | PREMIUM ($9.99/mo) |
+| --- | ---: | ---: |
+| Coach questions | Up to **30 total** per user | **Unlimited** |
+| Chat questions | Up to **10 total** per user | **Unlimited** |
+| Practice sessions | Included (within question cap) | **Unlimited practice sessions** |
+| Full exams | Included (within question cap) | **Unlimited full exams** |
+| AI Tutor sessions | — | Included |
+| Priority support | — | Included |
 
-### BASIC includes
+> **How limits work:** BASIC limits are account-level totals. PREMIUM removes those limits.
 
-- Exam Coach access
-- Practice exams
-- Basic chat
-- Up to 30 coach questions total
-- Up to 10 chat questions total
+### Which plan should I pick?
 
-### PREMIUM includes
+- **BASIC**: Best for trialing the platform and light exam prep.
+- **PREMIUM**: Best for active prep with unlimited tests, unlimited practice sessions, and unlimited chat.
 
-- Everything in BASIC
-- AI Tutor sessions
-- Priority support
-- Full or practice exams as often as needed
-- Unlimited coach questions
-- Unlimited chat questions
+Start free on [fintechadvisor.ai](https://fintechadvisor.ai), then upgrade to PREMIUM when you need unlimited practice and chat.
 
 ---
 
@@ -82,7 +80,7 @@ Trusted Advisor supports two plan tiers:
 Trusted Advisor monetizes through a freemium subscription model on `fintechadvisor.ai`:
 
 - `BASIC` keeps onboarding friction low with free access and capped usage.
-- `PREMIUM` unlocks unlimited chat and unlimited exam practice for paying users.
+- `PREMIUM` unlocks unlimited tests, unlimited practice sessions, unlimited coach questions, and unlimited chat.
 - Access-request and admin approval workflows support controlled user acquisition and conversion.
 
 ---
@@ -90,7 +88,7 @@ Trusted Advisor monetizes through a freemium subscription model on `fintechadvis
 ## Documentation
 
 | For | Document |
-|-----|----------|
+| ----- | ---------- |
 | **Chat behavior and config** | [docs/chat-advisor.md](docs/chat-advisor.md) |
 | **License exam prep (Coach)** | [docs/coach-license-exams.md](docs/coach-license-exams.md) |
 | **Subscription basics** | [docs/subscription.md](docs/subscription.md) |

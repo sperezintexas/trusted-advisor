@@ -1,6 +1,6 @@
 {
   "name": "trusted-advisor-frontend",
-  "version": "0.2.6",
+  "version": "1.0.3",
   "private": true,
   "scripts": {
     "dev": "next dev",
