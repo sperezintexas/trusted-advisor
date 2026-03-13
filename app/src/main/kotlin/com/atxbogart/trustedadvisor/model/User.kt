@@ -28,6 +28,10 @@ data class User(
     val username: String,
     val displayName: String? = null,
     val profileImageUrl: String? = null,
+    @Indexed(unique = true, sparse = true)
+    val stripeCustomerId: String? = null,
+    val stripeSubscriptionId: String? = null,
+    val stripeSubscriptionStatus: String? = null,
     /** User role: ADMIN, BASIC (free), or PREMIUM (paid). Defaults to BASIC. */
     val role: UserRole = UserRole.BASIC,
     /** True once the user has completed in-app registration for the first time. */

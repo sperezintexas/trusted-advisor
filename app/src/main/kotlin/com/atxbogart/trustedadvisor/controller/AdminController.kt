@@ -43,9 +43,22 @@ class AdminController(
             .toSet()
     }
 
+    private fun isConfiguredAdmin(identity: String): Boolean {
+        val normalized = identity.trim().lowercase()
+        if (normalized.isEmpty()) return false
+        val localPart = normalized.substringBefore("@")
+        return adminEmails.any { adminEntry ->
+            if (adminEntry.contains("@")) {
+                adminEntry == normalized
+            } else {
+                adminEntry == normalized || adminEntry == localPart
+            }
+        }
+    }
+
     private fun isAdmin(email: String): Boolean {
         if (skipAuth) return true
-        if (adminEmails.contains(email.lowercase())) return true
+        if (isConfiguredAdmin(email)) return true
         val user = userRepository.findByEmail(email)
         return user?.role == UserRole.ADMIN
     }

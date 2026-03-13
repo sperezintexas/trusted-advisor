@@ -67,6 +67,32 @@ export type AccessRequestStatusResponse = {
   createdAt: string | null
 }
 
+export type SubscriptionPlanView = {
+  tier: 'BASIC' | 'PREMIUM' | string
+  displayName: string
+  monthlyPriceUsd: string
+  features: string[]
+  stripeProductId?: string | null
+  stripePriceId?: string | null
+  source?: 'stripe' | 'static' | string
+}
+
+export type SubscriptionPlansResponse = {
+  plans: SubscriptionPlanView[]
+}
+
+export type CreateCheckoutResponse = {
+  success: boolean
+  message: string
+  checkoutUrl: string | null
+  sessionId: string | null
+}
+
+export type VerifyCheckoutResponse = {
+  verified: boolean
+  message: string
+}
+
 /**
  * Invalidate stored API key and redirect to login. Use for logout buttons.
  */
@@ -123,6 +149,50 @@ export async function fetchAccessRequestStatus(): Promise<AccessRequestStatusRes
     const res = await fetch(apiUrl('/auth/access-request/status'), defaultFetchOptions())
     if (!res.ok) return null
     return (await res.json()) as AccessRequestStatusResponse
+  } catch {
+    return null
+  }
+}
+
+export async function fetchSubscriptionPlans(): Promise<SubscriptionPlansResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/auth/subscription/plans'), defaultFetchOptions())
+    if (!res.ok) return null
+    return (await res.json()) as SubscriptionPlansResponse
+  } catch {
+    return null
+  }
+}
+
+export async function createSubscriptionCheckout(input: {
+  tier: string
+  username: string
+  displayName: string
+}): Promise<CreateCheckoutResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/auth/subscription/checkout'), {
+      ...defaultFetchOptions({
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    })
+    if (!res.ok) return null
+    return (await res.json()) as CreateCheckoutResponse
+  } catch {
+    return null
+  }
+}
+
+export async function verifySubscriptionCheckout(
+  sessionId: string
+): Promise<VerifyCheckoutResponse | null> {
+  try {
+    const res = await fetch(
+      apiUrl(`/auth/subscription/checkout/verify?sessionId=${encodeURIComponent(sessionId)}`),
+      defaultFetchOptions()
+    )
+    if (!res.ok) return null
+    return (await res.json()) as VerifyCheckoutResponse
   } catch {
     return null
   }

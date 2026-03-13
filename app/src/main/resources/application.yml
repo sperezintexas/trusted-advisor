@@ -43,6 +43,16 @@ xai:
   api:
     key: ${XAI_API_KEY:}
 
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  products:
+    basic: ${STRIPE_PRODUCT_ID_BASIC:}
+    premium: ${STRIPE_PRODUCT_ID_PREMIUM:}
+  prices:
+    basic: ${STRIPE_PRICE_ID_BASIC:}
+    premium: ${STRIPE_PRICE_ID_PREMIUM:}
+
 # API key auth: frontend sends X-API-Key or Authorization: Bearer <key>; must match AUTH_SECRET.
 # OAuth2 success redirect and cookie: set FRONTEND_URL when frontend is on another origin.
 # Admin emails: comma-separated list of emails with admin privileges (can approve/reject access requests).

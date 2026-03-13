@@ -41,8 +41,32 @@ class AccessRequestService(
 
         val existingRequest = accessRequestRepository.findByEmail(email)
         if (existingRequest != null) {
-            log.info("[access-request] Request already exists for: {} with status: {}", email, existingRequest.status)
-            return AccessRequestResult.AlreadyExists(existingRequest)
+            return when (existingRequest.status) {
+                AccessRequestStatus.PENDING -> {
+                    log.info("[access-request] Request already exists for: {} with status: {}", email, existingRequest.status)
+                    AccessRequestResult.AlreadyExists(existingRequest)
+                }
+                AccessRequestStatus.APPROVED,
+                AccessRequestStatus.REJECTED -> {
+                    // If user was removed later, allow re-request by reopening as PENDING.
+                    val now = LocalDateTime.now(ZoneOffset.UTC)
+                    val reopened = existingRequest.copy(
+                        status = AccessRequestStatus.PENDING,
+                        displayName = displayName ?: existingRequest.displayName,
+                        reason = reason ?: existingRequest.reason,
+                        oauthProvider = oauthProvider ?: existingRequest.oauthProvider,
+                        profileImageUrl = profileImageUrl ?: existingRequest.profileImageUrl,
+                        reviewedBy = null,
+                        reviewNote = null,
+                        reviewedAt = null,
+                        updatedAt = now
+                    )
+                    val saved = accessRequestRepository.save(reopened)
+                    log.info("[access-request] Reopened request for {} from status {} (id={})", email, existingRequest.status, saved.id)
+                    slackNotificationService.sendAccessRequestNotification(saved)
+                    AccessRequestResult.Success(saved)
+                }
+            }
         }
 
         val now = LocalDateTime.now(ZoneOffset.UTC)

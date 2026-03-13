@@ -1,19 +1,31 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import AppHeader from '../components/AppHeader'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
-import { fetchAuthSession, type AuthSession } from '@/lib/auth'
+import {
+  createSubscriptionCheckout,
+  fetchAuthSession,
+  fetchSubscriptionPlans,
+  verifySubscriptionCheckout,
+  type AuthSession,
+  type SubscriptionPlanView,
+} from '@/lib/auth'
 
 type Tier = 'BASIC' | 'PREMIUM'
 
 export default function RegisterPage() {
+  const searchParams = useSearchParams()
   const [session, setSession] = useState<AuthSession | null>(null)
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [tier, setTier] = useState<Tier>('BASIC')
+  const [plans, setPlans] = useState<SubscriptionPlanView[]>([])
+  const [plansLoading, setPlansLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const checkoutHandledRef = useRef(false)
 
   useEffect(() => {
     void fetchAuthSession().then((s) => {
@@ -26,9 +38,51 @@ export default function RegisterPage() {
     })
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!session?.allowed) return
+  useEffect(() => {
+    void fetchSubscriptionPlans().then((response) => {
+      const available = response?.plans ?? []
+      const defaults: (SubscriptionPlanView & { tier: Tier })[] = [
+        {
+          tier: 'BASIC',
+          displayName: 'Basic',
+          monthlyPriceUsd: '0.00',
+          features: ['Exam Coach access', 'Practice exams', 'Basic chat'],
+          source: 'static',
+        },
+        {
+          tier: 'PREMIUM',
+          displayName: 'Premium',
+          monthlyPriceUsd: '9.99',
+          features: ['Everything in Basic', 'AI Tutor sessions', 'Priority support'],
+          source: 'static',
+        },
+      ]
+      const filtered = available.filter(
+        (p): p is SubscriptionPlanView & { tier: Tier } =>
+          p.tier === 'BASIC' || p.tier === 'PREMIUM'
+      )
+      // Always show both tiers in UI; Stripe values override defaults when present.
+      const mergedByTier: Record<Tier, SubscriptionPlanView & { tier: Tier }> = {
+        BASIC: defaults[0],
+        PREMIUM: defaults[1],
+      }
+      defaults.forEach((plan) => {
+        mergedByTier[plan.tier] = plan
+      })
+      filtered.forEach((plan) => {
+        mergedByTier[plan.tier] = plan
+      })
+      const merged = (['BASIC', 'PREMIUM'] as Tier[]).map((tierKey) => mergedByTier[tierKey])
+      setPlans(merged)
+      setTier((prev) => (merged.some((p) => p.tier === prev) ? prev : merged[0].tier))
+      setPlansLoading(false)
+    })
+  }, [])
+
+  const completeRegistration = useCallback(async (
+    selectedTier: Tier,
+    profile?: { username: string; displayName: string }
+  ) => {
     setSubmitting(true)
     setError(null)
     try {
@@ -36,7 +90,11 @@ export default function RegisterPage() {
         apiUrl('/auth/register'),
         defaultFetchOptions({
           method: 'POST',
-          body: JSON.stringify({ username, displayName, tier }),
+          body: JSON.stringify({
+            username: profile?.username ?? username,
+            displayName: profile?.displayName ?? displayName,
+            tier: selectedTier,
+          }),
         }),
       )
       if (!res.ok) {
@@ -49,7 +107,80 @@ export default function RegisterPage() {
     } finally {
       setSubmitting(false)
     }
+  }, [username, displayName])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!session?.allowed) return
+    if (tier === 'PREMIUM') {
+      setSubmitting(true)
+      setError(null)
+      try {
+        const pendingProfile = { username, displayName }
+        sessionStorage.setItem('pendingRegistrationProfile', JSON.stringify(pendingProfile))
+        const checkout = await createSubscriptionCheckout({
+          tier: 'PREMIUM',
+          username,
+          displayName,
+        })
+        if (!checkout?.success || !checkout.checkoutUrl) {
+          setError(checkout?.message ?? 'Could not start checkout. Verify Stripe setup.')
+          setSubmitting(false)
+          return
+        }
+        window.location.href = checkout.checkoutUrl
+        return
+      } catch {
+        setError('Could not start checkout. Try again.')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+    await completeRegistration('BASIC')
   }
+
+  useEffect(() => {
+    const checkoutState = searchParams.get('checkout')
+    const sessionId = searchParams.get('session_id')
+    if (!session?.allowed) return
+    if (checkoutHandledRef.current) return
+
+    if (checkoutState === 'cancelled') {
+      checkoutHandledRef.current = true
+      setError('Checkout was cancelled. You can try again.')
+      return
+    }
+    if (checkoutState !== 'success' || !sessionId) return
+
+    checkoutHandledRef.current = true
+    setSubmitting(true)
+    setError(null)
+
+    void (async () => {
+      const verify = await verifySubscriptionCheckout(sessionId)
+      if (!verify?.verified) {
+        setError(verify?.message ?? 'Unable to verify checkout session.')
+        setSubmitting(false)
+        return
+      }
+      const stored = sessionStorage.getItem('pendingRegistrationProfile')
+      let profile: { username: string; displayName: string } | undefined
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as { username?: string; displayName?: string }
+          profile = {
+            username: parsed.username ?? username,
+            displayName: parsed.displayName ?? displayName,
+          }
+        } catch {
+          profile = { username, displayName }
+        }
+      }
+      sessionStorage.removeItem('pendingRegistrationProfile')
+      await completeRegistration('PREMIUM', profile)
+    })()
+  }, [searchParams, session?.allowed, username, displayName, completeRegistration])
 
   const email = session?.user?.email ?? ''
 
@@ -66,8 +197,9 @@ export default function RegisterPage() {
             and choose your plan.
           </p>
           <div className="mt-4 rounded-lg border border-[var(--docs-border)] bg-[var(--docs-code-bg)] px-3 py-2 text-xs text-[var(--docs-muted)]">
-            Plan rates: <span className="font-medium text-[var(--docs-text)]">Basic $0/mo</span>{' '}
-            · <span className="font-medium text-[var(--docs-text)]">Premium $9.99/mo</span>
+            {plansLoading
+              ? 'Loading plan rates...'
+              : `Plan rates: ${plans.map((p) => `${p.displayName} $${p.monthlyPriceUsd}/mo`).join(' · ')}`}
           </div>
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
@@ -116,48 +248,30 @@ export default function RegisterPage() {
                 Choose your plan
               </label>
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setTier('BASIC')}
-                  className={`rounded-lg border-2 p-4 text-left transition-all ${
-                    tier === 'BASIC'
-                      ? 'border-[var(--docs-accent)] bg-blue-50'
-                      : 'border-[var(--docs-border)] hover:border-gray-300'
-                  }`}
-                >
-                  <div className="text-sm font-semibold text-[var(--docs-text)]">
-                    Basic
-                  </div>
-                  <div className="text-xs text-[var(--docs-muted)] mt-1">$0.00 / month</div>
-                  <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
-                    <li>• Exam Coach access</li>
-                    <li>• Practice exams</li>
-                    <li>• Basic chat</li>
-                    <li>• 30 coach questions total</li>
-                    <li>• 10 chat questions total</li>
-                  </ul>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTier('PREMIUM')}
-                  className={`rounded-lg border-2 p-4 text-left transition-all ${
-                    tier === 'PREMIUM'
-                      ? 'border-[var(--docs-accent)] bg-blue-50'
-                      : 'border-[var(--docs-border)] hover:border-gray-300'
-                  }`}
-                >
-                  <div className="text-sm font-semibold text-[var(--docs-text)]">
-                    Premium
-                  </div>
-                  <div className="text-xs text-[var(--docs-muted)] mt-1">$9.99 / month</div>
-                  <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
-                    <li>• Everything in Basic</li>
-                    <li>• AI Tutor sessions</li>
-                    <li>• Priority support</li>
-                    <li>• Unlimited coach questions</li>
-                    <li>• Unlimited chat questions</li>
-                  </ul>
-                </button>
+                {plans.map((plan) => (
+                  <button
+                    key={plan.tier}
+                    type="button"
+                    onClick={() => setTier(plan.tier as Tier)}
+                    className={`rounded-lg border-2 p-4 text-left transition-all ${
+                      tier === plan.tier
+                        ? 'border-[var(--docs-accent)] bg-blue-50'
+                        : 'border-[var(--docs-border)] hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold text-[var(--docs-text)]">
+                      {plan.displayName}
+                    </div>
+                    <div className="text-xs text-[var(--docs-muted)] mt-1">
+                      ${plan.monthlyPriceUsd} / month
+                    </div>
+                    <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
+                      {plan.features.map((feature) => (
+                        <li key={feature}>• {feature}</li>
+                      ))}
+                    </ul>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -171,7 +285,7 @@ export default function RegisterPage() {
               disabled={submitting || !session?.allowed}
               className="mt-2 w-full rounded-lg bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2 disabled:opacity-50"
             >
-              {submitting ? 'Saving…' : tier === 'PREMIUM' ? 'Continue to payment' : 'Start for free'}
+              {submitting ? 'Processing…' : tier === 'PREMIUM' ? 'Continue to Stripe Checkout' : 'Start for free'}
             </button>
           </form>
         </div>

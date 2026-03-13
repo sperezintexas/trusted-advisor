@@ -10,6 +10,8 @@ import {
   fetchAccessRequests,
   approveAccessRequest,
   rejectAccessRequest,
+  fetchUsers,
+  deleteUser,
   fetchPersonaDocuments,
   uploadPersonaDocument,
   reindexPersonaDocument,
@@ -18,6 +20,7 @@ import {
   type AccessRequestView,
   type AdminDocumentView,
   type GeneratedQuestionView,
+  type UserView,
 } from '@/lib/admin'
 
 type ChatConfig = {
@@ -38,7 +41,7 @@ type AuthDebug = {
   username: string | null
 }
 
-type ConfigTab = 'system' | 'access-requests' | 'rag-documents' | 'generate-questions'
+type ConfigTab = 'system' | 'access-requests' | 'users' | 'rag-documents' | 'generate-questions'
 
 type Persona = { id: string; name: string; description?: string }
 
@@ -57,6 +60,10 @@ export default function ConfigPage() {
   const [accessLoading, setAccessLoading] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null)
+  const [users, setUsers] = useState<UserView[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState<string | null>(null)
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [personas, setPersonas] = useState<Persona[]>([])
   const [personasLoading, setPersonasLoading] = useState(true)
   const [ragPersonaId, setRagPersonaId] = useState<string>('')
@@ -187,6 +194,37 @@ export default function ConfigPage() {
     if (activeTab !== 'access-requests') return
     void loadAccessRequests()
   }, [activeTab, loadAccessRequests])
+
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true)
+    setUsersError(null)
+    const result = await fetchUsers()
+    if (result === null) {
+      setUsersError('Failed to load users.')
+      setUsers([])
+    } else {
+      setUsers(result.users)
+    }
+    setUsersLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'users') void loadUsers()
+  }, [activeTab, loadUsers])
+
+  const handleDeleteUser = useCallback(
+    async (id: string, email: string) => {
+      if (!confirm(`Delete user "${email}"? This cannot be undone.`)) return
+      setDeletingUserId(id)
+      setUsersError(null)
+      const result = await deleteUser(id)
+      setDeletingUserId(null)
+      if (result?.success) void loadUsers()
+      else if (result && !result.success) setUsersError(result.message)
+      else setUsersError('Delete failed.')
+    },
+    [loadUsers]
+  )
 
   const loadPersonas = useCallback(async () => {
     setPersonasLoading(true)
@@ -380,6 +418,17 @@ export default function ConfigPage() {
               }`}
             >
               Access Requests
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('users')}
+              className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+                activeTab === 'users'
+                  ? 'border border-b-0 border-[var(--docs-border)] bg-white text-[var(--docs-text)]'
+                  : 'text-[var(--docs-muted)] hover:text-[var(--docs-text)]'
+              }`}
+            >
+              Users
             </button>
             <button
               type="button"
@@ -733,6 +782,85 @@ export default function ConfigPage() {
                                 className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
                               >
                                 Reject
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </section>
+          )}
+
+          {activeTab === 'users' && (
+            <section className="mb-12">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-medium text-[var(--docs-text)]">
+                    Users
+                  </h2>
+                  <p className="text-sm text-[var(--docs-muted)]">
+                    View and remove registered users. Deleting a user cannot be undone.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadUsers()}
+                  disabled={usersLoading}
+                  className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
+                >
+                  {usersLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+              <div className="docs-path mb-3 inline-block">
+                GET /api/admin/users · DELETE /api/admin/users/:id
+              </div>
+              {usersError && (
+                <p className="mb-2 text-sm text-red-600" role="alert">
+                  {usersError}
+                </p>
+              )}
+              <div className="overflow-hidden rounded-lg border border-[var(--docs-border)] bg-white">
+                {usersLoading && users.length === 0 ? (
+                  <div className="p-4 text-sm text-[var(--docs-muted)]">Loading users…</div>
+                ) : users.length === 0 ? (
+                  <div className="p-4 text-sm text-[var(--docs-muted)]">No users.</div>
+                ) : (
+                  <table className="min-w-full divide-y divide-[var(--docs-border)]">
+                    <thead className="bg-[var(--docs-code-bg)]">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">User</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Registered</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Last login</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--docs-border)]">
+                      {users.map((u) => (
+                        <tr key={u.id}>
+                          <td className="px-4 py-3 text-sm">
+                            <p className="font-medium text-[var(--docs-text)]">
+                              {u.displayName || u.username || u.email}
+                            </p>
+                            <p className="text-xs text-[var(--docs-muted)]">{u.email}</p>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
+                            {formatDate(u.createdAt)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
+                            {u.lastLoginAt ? formatDate(u.lastLoginAt) : '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end">
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteUser(u.id, u.email)}
+                                disabled={deletingUserId === u.id}
+                                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                              >
+                                {deletingUserId === u.id ? 'Deleting…' : 'Delete'}
                               </button>
                             </div>
                           </td>

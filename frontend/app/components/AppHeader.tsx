@@ -26,9 +26,11 @@ export default function AppHeader() {
     fetchAuthSession().then((session) => {
       if (session?.user?.role) {
         setRole(session.user.role)
+      } else {
+        setRole(null)
       }
     })
-  }, [])
+  }, [pathname, user?.id])
 
   const navItemClass = (isActive: boolean) =>
     [

@@ -65,6 +65,7 @@ class SecurityConfig(
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         .requestMatchers("/api/chat/config/test").permitAll()
                         .requestMatchers("/api/debug/auth").permitAll()
+                        .requestMatchers("/api/stripe/webhook").permitAll()
                         .requestMatchers("/api/logout").permitAll()
                         .requestMatchers("/login", "/oauth2/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
