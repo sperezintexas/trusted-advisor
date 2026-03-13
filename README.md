@@ -45,5 +45,6 @@ Trusted Advisor is an AI-powered coaching platform for financial exam prep and p
 ## Product snapshot
 
 ![Exam Coach - Practice for FINRA licensing exams](docs/coachexams.jpg)
+![Exam Coach - Grok hints during timed practice](docs/hintscoach2.png)
 
 Trusted Advisor is built for outcomes: better preparation, better decision quality, and better performance at scale.
