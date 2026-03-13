@@ -6,6 +6,12 @@ import org.springframework.data.mongodb.core.mapping.Document
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
+enum class UserRole {
+    ADMIN,
+    BASIC,
+    PREMIUM
+}
+
 @Document(collection = "users")
 data class User(
     @Id
@@ -22,6 +28,8 @@ data class User(
     val username: String,
     val displayName: String? = null,
     val profileImageUrl: String? = null,
+    /** User role: ADMIN, BASIC (free), or PREMIUM (paid). Defaults to BASIC. */
+    val role: UserRole = UserRole.BASIC,
     /** True once the user has completed in-app registration for the first time. */
     val registered: Boolean = false,
     val createdAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),

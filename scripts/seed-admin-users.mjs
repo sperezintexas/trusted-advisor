@@ -61,6 +61,7 @@ async function main() {
         username,
         displayName: null,
         profileImageUrl: null,
+        role: 'ADMIN',
         registered: false,
         createdAt: now,
         updatedAt: now,

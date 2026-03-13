@@ -12,7 +12,7 @@ export default function HomePage() {
     fetchSession()
       .then((user) => {
         if (cancelled) return
-        router.replace(user ? '/chat' : '/login')
+        router.replace(user ? '/coach' : '/login')
       })
       .catch(() => {
         if (cancelled) return

@@ -41,6 +41,8 @@ export type User = {
   profileImageUrl: string | null
 }
 
+export type UserRole = 'ADMIN' | 'BASIC' | 'PREMIUM'
+
 export type AuthSession = {
   allowed: boolean
   needsRegistration: boolean
@@ -49,6 +51,7 @@ export type AuthSession = {
     email: string
     username: string
     displayName: string | null
+    role: UserRole
   } | null
 }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import AppHeader from '../components/AppHeader'
+import AdminGuard from '../components/AdminGuard'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 type Persona = {
@@ -199,12 +200,13 @@ export default function PersonasPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--docs-bg)]">
-      <AppHeader />
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8">
-        <h1 className="mb-2 text-2xl font-semibold text-[var(--docs-text)]">
-          Manage Personas
-        </h1>
+    <AdminGuard>
+      <div className="flex min-h-screen flex-col bg-[var(--docs-bg)]">
+        <AppHeader />
+        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8">
+          <h1 className="mb-2 text-2xl font-semibold text-[var(--docs-text)]">
+            Manage Personas
+          </h1>
         <p className="mb-6 text-sm text-[var(--docs-muted)]">
           Create and edit expert personas used in chat responses.
         </p>
@@ -418,7 +420,8 @@ export default function PersonasPage() {
             )}
           </section>
         </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </AdminGuard>
   )
 }

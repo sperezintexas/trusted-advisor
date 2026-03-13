@@ -3,6 +3,7 @@ package com.atxbogart.trustedadvisor.controller
 import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import com.atxbogart.trustedadvisor.model.AccessRequestStatus
 import com.atxbogart.trustedadvisor.model.User
+import com.atxbogart.trustedadvisor.model.UserRole
 import com.atxbogart.trustedadvisor.repository.UserRepository
 import com.atxbogart.trustedadvisor.service.AccessRequestResult
 import com.atxbogart.trustedadvisor.service.AccessRequestService
@@ -68,7 +69,8 @@ class AuthController(
                     user = AuthUserView(
                         email = "dev-user@example.com",
                         username = "dev-user",
-                        displayName = "Developer"
+                        displayName = "Developer",
+                        role = "ADMIN"
                     )
                 )
             )
@@ -85,7 +87,8 @@ class AuthController(
                     user = AuthUserView(
                         email = email,
                         username = email.substringBefore("@"),
-                        displayName = null
+                        displayName = null,
+                        role = "BASIC"
                     )
                 )
             )
@@ -99,7 +102,8 @@ class AuthController(
                 user = AuthUserView(
                     email = user.email ?: email,
                     username = user.username,
-                    displayName = user.displayName
+                    displayName = user.displayName,
+                    role = user.role.name
                 )
             )
         )
@@ -213,7 +217,8 @@ class AuthController(
                     user = AuthUserView(
                         email = "dev-user@example.com",
                         username = body.username.ifBlank { "dev-user" },
-                        displayName = body.displayName.ifBlank { "Developer" }
+                        displayName = body.displayName.ifBlank { "Developer" },
+                        role = "ADMIN"
                     )
                 )
             )
@@ -222,10 +227,17 @@ class AuthController(
         val existing = userRepository.findByEmail(email)
             ?: return ResponseEntity.status(403).build()
 
+        val requestedRole = when (body.tier.uppercase()) {
+            "PREMIUM" -> UserRole.PREMIUM
+            "ADMIN" -> if (existing.role == UserRole.ADMIN) UserRole.ADMIN else existing.role
+            else -> UserRole.BASIC
+        }
+
         val now = LocalDateTime.now(ZoneOffset.UTC)
         val updated: User = existing.copy(
             username = if (body.username.isNotBlank()) body.username else existing.username,
             displayName = body.displayName.ifBlank { existing.displayName },
+            role = if (existing.role == UserRole.ADMIN) UserRole.ADMIN else requestedRole,
             registered = true,
             firstLoginAt = existing.firstLoginAt ?: now,
             lastLoginAt = now,
@@ -240,7 +252,8 @@ class AuthController(
                 user = AuthUserView(
                     email = saved.email ?: email,
                     username = saved.username,
-                    displayName = saved.displayName
+                    displayName = saved.displayName,
+                    role = saved.role.name
                 )
             )
         )
@@ -265,7 +278,8 @@ data class MeResponse(
 data class AuthUserView(
     val email: String,
     val username: String,
-    val displayName: String?
+    val displayName: String?,
+    val role: String
 )
 
 data class AuthSessionResponse(
@@ -277,7 +291,8 @@ data class AuthSessionResponse(
 
 data class RegistrationRequest(
     val username: String = "",
-    val displayName: String = ""
+    val displayName: String = "",
+    val tier: String = "BASIC"
 )
 
 data class AccessRequestBody(

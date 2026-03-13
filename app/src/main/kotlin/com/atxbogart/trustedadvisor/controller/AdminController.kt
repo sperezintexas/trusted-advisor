@@ -3,6 +3,7 @@ package com.atxbogart.trustedadvisor.controller
 import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import com.atxbogart.trustedadvisor.model.AccessRequest
 import com.atxbogart.trustedadvisor.model.User
+import com.atxbogart.trustedadvisor.model.UserRole
 import com.atxbogart.trustedadvisor.repository.UserRepository
 import com.atxbogart.trustedadvisor.service.AccessRequestResult
 import com.atxbogart.trustedadvisor.service.AccessRequestService
@@ -34,7 +35,9 @@ class AdminController(
 
     private fun isAdmin(email: String): Boolean {
         if (skipAuth) return true
-        return adminEmails.contains(email.lowercase())
+        if (adminEmails.contains(email.lowercase())) return true
+        val user = userRepository.findByEmail(email)
+        return user?.role == UserRole.ADMIN
     }
 
     private fun currentEmailFromOAuth2(): String? {

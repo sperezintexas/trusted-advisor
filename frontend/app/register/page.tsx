@@ -5,10 +5,13 @@ import AppHeader from '../components/AppHeader'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 import { fetchAuthSession, type AuthSession } from '@/lib/auth'
 
+type Tier = 'BASIC' | 'PREMIUM'
+
 export default function RegisterPage() {
   const [session, setSession] = useState<AuthSession | null>(null)
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [tier, setTier] = useState<Tier>('BASIC')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,14 +36,14 @@ export default function RegisterPage() {
         apiUrl('/auth/register'),
         defaultFetchOptions({
           method: 'POST',
-          body: JSON.stringify({ username, displayName }),
+          body: JSON.stringify({ username, displayName, tier }),
         }),
       )
       if (!res.ok) {
         setError('Could not complete registration. Try again.')
         return
       }
-      window.location.href = '/chat'
+      window.location.href = '/coach'
     } catch {
       setError('Something went wrong. Try again.')
     } finally {
@@ -54,13 +57,13 @@ export default function RegisterPage() {
     <div className="flex min-h-screen flex-col bg-[var(--docs-bg)]">
       <AppHeader />
       <main className="mx-auto flex min-h-[80vh] flex-1 flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm rounded-lg border border-[var(--docs-border)] bg-white p-8 shadow-sm">
+        <div className="w-full max-w-md rounded-lg border border-[var(--docs-border)] bg-white p-8 shadow-sm">
           <h1 className="text-xl font-semibold text-[var(--docs-text)]">
             Complete your profile
           </h1>
           <p className="mt-2 text-sm text-[var(--docs-muted)]">
             You&apos;ve been authorized to use Trusted Advisor. Confirm your details
-            to finish setting up your account.
+            and choose your plan.
           </p>
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
@@ -103,6 +106,53 @@ export default function RegisterPage() {
                 disabled={submitting}
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)] mb-3">
+                Choose your plan
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTier('BASIC')}
+                  className={`rounded-lg border-2 p-4 text-left transition-all ${
+                    tier === 'BASIC'
+                      ? 'border-[var(--docs-accent)] bg-blue-50'
+                      : 'border-[var(--docs-border)] hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-sm font-semibold text-[var(--docs-text)]">
+                    Basic
+                  </div>
+                  <div className="text-xs text-[var(--docs-muted)] mt-1">Free</div>
+                  <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
+                    <li>• Exam Coach access</li>
+                    <li>• Practice exams</li>
+                    <li>• Basic chat</li>
+                  </ul>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTier('PREMIUM')}
+                  className={`rounded-lg border-2 p-4 text-left transition-all ${
+                    tier === 'PREMIUM'
+                      ? 'border-[var(--docs-accent)] bg-blue-50'
+                      : 'border-[var(--docs-border)] hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-sm font-semibold text-[var(--docs-text)]">
+                    Premium
+                  </div>
+                  <div className="text-xs text-[var(--docs-muted)] mt-1">$9.99/mo</div>
+                  <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
+                    <li>• Everything in Basic</li>
+                    <li>• AI Tutor sessions</li>
+                    <li>• Priority support</li>
+                  </ul>
+                </button>
+              </div>
+            </div>
+
             {error && (
               <p className="text-sm text-red-600" role="alert">
                 {error}
@@ -113,7 +163,7 @@ export default function RegisterPage() {
               disabled={submitting || !session?.allowed}
               className="mt-2 w-full rounded-lg bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2 disabled:opacity-50"
             >
-              {submitting ? 'Saving…' : 'Finish setup'}
+              {submitting ? 'Saving…' : tier === 'PREMIUM' ? 'Continue to payment' : 'Start for free'}
             </button>
           </form>
         </div>
