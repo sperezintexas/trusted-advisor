@@ -227,9 +227,11 @@ class AuthController(
         val existing = userRepository.findByEmail(email)
             ?: return ResponseEntity.status(403).build()
 
-        val requestedRole = when (body.tier.uppercase()) {
-            "PREMIUM" -> UserRole.PREMIUM
-            "ADMIN" -> if (existing.role == UserRole.ADMIN) UserRole.ADMIN else existing.role
+        // Registration never upgrades subscription tier from client input.
+        // PREMIUM/ADMIN role assignment must be done by admin tooling or billing webhook.
+        val requestedRole = when {
+            existing.role == UserRole.ADMIN -> UserRole.ADMIN
+            existing.role == UserRole.PREMIUM -> UserRole.PREMIUM
             else -> UserRole.BASIC
         }
 

@@ -1,57 +1,49 @@
 # Trusted Advisor
 
-A conversational AI assistant powered by **xAI Grok**, with expert personas and built-in **securities license exam prep** (SIE, Series 7, Series 57, Series 65). Use it for advice, research, and timed practice exams with instant feedback and explanations.
+Trusted Advisor is an AI-powered coaching platform for financial exam prep and professional decision support. It combines expert personas, live intelligence, and structured practice workflows to help people learn faster, make better decisions, and perform with confidence.
 
 ---
 
-## Why Trusted Advisor?
+## Why teams and learners use Trusted Advisor
 
-### For Students & Career Changers
-- **Pass your FINRA exams faster** — Practice with realistic, timed exams that mirror actual test conditions. Instant feedback on every question helps you learn from mistakes immediately.
-- **Study smarter, not harder** — AI-powered explanations break down complex concepts. The tutor session adapts to your weak areas and provides personalized guidance.
-- **Affordable prep alternative** — Skip the $300+ exam prep courses. Get comprehensive practice with detailed explanations at a fraction of the cost.
-- **Track your progress** — View your attempt history, scores, and improvement over time. Know exactly when you're ready to sit for the real exam.
-
-### For Financial Services Firms
-- **Onboard new hires efficiently** — Give trainees 24/7 access to exam prep and AI-powered study assistance without scheduling instructor time.
-- **Reduce exam failure costs** — Each failed FINRA exam costs time, money, and delays productivity. Better prep means higher first-time pass rates.
-- **Consistent training quality** — Every employee gets the same high-quality explanations and practice materials.
-- **Compliance-ready documentation** — Track employee progress and exam readiness across your team.
+- **Faster exam readiness** with guided practice for SIE, Series 7, Series 57, and Series 65.
+- **Higher confidence under pressure** through timed exam simulation and instant explanations.
+- **Smarter learning loops** with progress history, score trends, and targeted improvement.
+- **Scalable enablement** for firms that need consistent, high-quality training outcomes.
+- **Always-on support** so users can practice, ask questions, and refine understanding anytime.
 
 ---
 
-## What you can do
+## Core features
 
-- **Chat with expert personas** — Choose or create personas (e.g. finance, legal, tax). Turn on live web search and market data (Yahoo Finance) per persona. View token usage when you want.
-- **Practice for license exams** — Take timed, multiple-choice practice or full-length exams. Check each answer (right/wrong highlighted), read explanations, and review your attempt history and scores.
-- **SIE tutor** — From the Coach page, start an SIE "Tutor session" to open Chat with a study-focused prompt and the Options Exam Coach persona.
+- **AI Chat with expert personas**  
+  Interact with finance-focused advisors tailored to different goals and communication styles.
+
+- **Persona-specific knowledge context**  
+  Attach structured reference content to personas so responses can use role-specific context.
+
+- **Exam Coach experience**  
+  Run realistic practice sessions and full exams with immediate correctness checks and explanations.
+
+- **Tutor mode for focused study**  
+  Launch guided coaching flows that adapt to weak areas and reinforce key concepts.
+
+- **Progress tracking**  
+  Review performance over time, identify gaps, and prioritize next study actions.
+
+---
+
+## Business impact
+
+- **Reduce failure-related cost** from repeated exam attempts and delayed productivity.
+- **Accelerate onboarding** for new advisors and licensed roles.
+- **Standardize training quality** across teams, cohorts, and locations.
+- **Improve retention** with clear milestones and measurable progress.
+
+---
+
+## Product snapshot
 
 ![Exam Coach - Practice for FINRA licensing exams](docs/coachexams.jpg)
 
----
-
-## Get started (local with .env)
-
-1. Copy `.env.example` to `.env` and set **AUTH_SECRET** (login password), **XAI_API_KEY**, and **MONGODB_URI** (or **MONGODB_URI_B64**) for your remote Mongo.
-2. **Backend:** from repo root run `./gradlew bootRun`
-3. **Frontend:** `cd frontend && npm install --legacy-peer-deps && npm run dev`
-4. Open **http://localhost:3000** and sign in with your AUTH_SECRET value.
-
-Chat, Personas, Config, and Coach (including full practice exams) all work. The frontend proxies `/api` to the backend.
-
-**Docker:** optional — `docker compose up --build` runs both; see [DEVELOPMENT.md](DEVELOPMENT.md) for details and troubleshooting.
-
----
-
-## Documentation
-
-| For | Document |
-|-----|----------|
-| **Setup, run, build, test** | [DEVELOPMENT.md](DEVELOPMENT.md) |
-| **Chat behavior and config** | [docs/chat-advisor.md](docs/chat-advisor.md) |
-| **License exam prep (Coach)** | [docs/coach-license-exams.md](docs/coach-license-exams.md) |
-| **Database collections** | [docs/database-schema.md](docs/database-schema.md) |
-| **API reference & coding guide** | [AGENTS.md](AGENTS.md) |
-| **Deploy to AWS App Runner** | [docs/aws-apprunner-ci.md](docs/aws-apprunner-ci.md) |
-
-Technical details (endpoints, APIs, stack, AWS and Cursor rules) are in the docs above.
+Trusted Advisor is built for outcomes: better preparation, better decision quality, and better performance at scale.

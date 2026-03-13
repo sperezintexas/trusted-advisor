@@ -8,6 +8,7 @@ import com.atxbogart.trustedadvisor.model.ChatRequest
 import com.atxbogart.trustedadvisor.model.ChatResponse
 import com.atxbogart.trustedadvisor.service.ChatConfigService
 import com.atxbogart.trustedadvisor.service.ChatService
+import com.atxbogart.trustedadvisor.service.ChatLimitsView
 import com.atxbogart.trustedadvisor.service.GrokTestResult
 import com.atxbogart.trustedadvisor.service.GrokService
 import org.springframework.beans.factory.annotation.Value
@@ -51,6 +52,14 @@ class ChatController(
         } catch (e: DataAccessException) {
             ResponseEntity.ok(emptyList())
         }
+    }
+
+    @GetMapping("/limits")
+    fun limits(@AuthenticationPrincipal principal: ApiKeyPrincipal?): ResponseEntity<ChatLimitsView> {
+        val userId = principal?.userId
+            ?: currentEmailFromOAuth2()
+            ?: if (skipAuth) "dev-user" else return ResponseEntity.status(401).build()
+        return ResponseEntity.ok(chatService.getChatLimits(userId))
     }
 
     @GetMapping("/config")

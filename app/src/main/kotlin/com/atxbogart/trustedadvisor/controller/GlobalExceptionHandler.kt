@@ -1,6 +1,7 @@
 package com.atxbogart.trustedadvisor.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.atxbogart.trustedadvisor.service.TokenLimitExceededException
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.http.HttpStatus
@@ -40,6 +41,20 @@ class GlobalExceptionHandler {
             .body(ErrorResponse(message))
     }
 
+    @ExceptionHandler(TokenLimitExceededException::class)
+    fun handleTokenLimit(e: TokenLimitExceededException): ResponseEntity<TokenLimitErrorResponse> {
+        return ResponseEntity
+            .status(HttpStatus.TOO_MANY_REQUESTS)
+            .body(
+                TokenLimitErrorResponse(
+                    message = "Daily token limit reached for ${e.role} plan.",
+                    role = e.role,
+                    used = e.used,
+                    limit = e.limit
+                )
+            )
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleOther(e: Exception): ResponseEntity<ErrorResponse> {
         log.error("Unhandled error", e)
@@ -61,3 +76,9 @@ class GlobalExceptionHandler {
 }
 
 data class ErrorResponse(val message: String)
+data class TokenLimitErrorResponse(
+    val message: String,
+    val role: String,
+    val used: Long,
+    val limit: Long
+)

@@ -134,16 +134,19 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => setTier('PREMIUM')}
+                  disabled
                   className={`rounded-lg border-2 p-4 text-left transition-all ${
                     tier === 'PREMIUM'
                       ? 'border-[var(--docs-accent)] bg-blue-50'
                       : 'border-[var(--docs-border)] hover:border-gray-300'
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   <div className="text-sm font-semibold text-[var(--docs-text)]">
                     Premium
                   </div>
-                  <div className="text-xs text-[var(--docs-muted)] mt-1">$9.99/mo</div>
+                  <div className="text-xs text-[var(--docs-muted)] mt-1">
+                    Premium (admin-enabled)
+                  </div>
                   <ul className="mt-2 text-xs text-[var(--docs-muted)] space-y-1">
                     <li>• Everything in Basic</li>
                     <li>• AI Tutor sessions</li>
