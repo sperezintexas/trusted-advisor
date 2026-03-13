@@ -5,6 +5,14 @@ import org.springframework.data.mongodb.core.mapping.Document
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
+enum class RecommendationStatus {
+    NONE,
+    QUEUED,
+    PROCESSING,
+    READY,
+    FAILED
+}
+
 @Document(collection = "coachExamAttempts")
 data class CoachExamAttempt(
     @Id
@@ -15,6 +23,12 @@ data class CoachExamAttempt(
     val total: Int,
     val percentage: Double,
     val passed: Boolean,
+    val missedTopics: List<String> = emptyList(),
+    val recommendationStatus: RecommendationStatus = RecommendationStatus.NONE,
+    val recommendation: LearningPlanRecommendation? = null,
+    val recommendationAttempts: Int = 0,
+    val recommendationError: String? = null,
+    val recommendationUpdatedAt: LocalDateTime? = null,
     val completedAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
     val createdAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)
 )

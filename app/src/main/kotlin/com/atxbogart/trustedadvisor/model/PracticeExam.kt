@@ -31,5 +31,14 @@ data class ScoreResponse(
     val total: Int,
     val percentage: Double,
     val passed: Boolean,
-    val passingPercentage: Int
+    val passingPercentage: Int,
+    val recommendation: LearningPlanRecommendation? = null,
+    val recommendationStatus: RecommendationStatus? = null,
+    val recommendationJobSubmitted: Boolean = false
+)
+
+data class LearningPlanRecommendation(
+    val summary: String,
+    val suggestedTopics: List<String> = emptyList(),
+    val proposedLearningPlan: List<String> = emptyList()
 )

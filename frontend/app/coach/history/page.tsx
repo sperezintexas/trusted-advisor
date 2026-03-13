@@ -2,10 +2,27 @@
 
 import AppHeader from '../../components/AppHeader'
 import Link from 'next/link'
-import type { CoachExamAttempt, ExamCode } from '@/types/coach'
+import type { CoachExamAttempt, ExamCode, RecommendationStatus } from '@/types/coach'
 import { getExamName } from '@/types/coach'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 import { useCallback, useEffect, useState } from 'react'
+
+const VALID_RECOMMENDATION_STATUS = [
+  'NONE',
+  'QUEUED',
+  'PROCESSING',
+  'READY',
+  'FAILED',
+] as const
+
+function toRecommendationStatus(raw: unknown): RecommendationStatus | undefined {
+  if (typeof raw !== 'string') return undefined
+  return VALID_RECOMMENDATION_STATUS.includes(
+    raw as (typeof VALID_RECOMMENDATION_STATUS)[number]
+  )
+    ? (raw as RecommendationStatus)
+    : undefined
+}
 
 function toAttempt(raw: unknown): CoachExamAttempt | null {
   if (typeof raw !== 'object' || raw === null) return null
@@ -26,6 +43,32 @@ function toAttempt(raw: unknown): CoachExamAttempt | null {
     total,
     percentage,
     passed,
+    recommendationStatus: toRecommendationStatus(o.recommendationStatus),
+    recommendation:
+      typeof o.recommendation === 'object' && o.recommendation !== null
+        ? {
+            summary:
+              typeof (o.recommendation as Record<string, unknown>).summary === 'string'
+                ? ((o.recommendation as Record<string, unknown>).summary as string)
+                : '',
+            suggestedTopics: Array.isArray(
+              (o.recommendation as Record<string, unknown>).suggestedTopics
+            )
+              ? (
+                  (o.recommendation as Record<string, unknown>)
+                    .suggestedTopics as unknown[]
+                ).filter((t): t is string => typeof t === 'string')
+              : [],
+            proposedLearningPlan: Array.isArray(
+              (o.recommendation as Record<string, unknown>).proposedLearningPlan
+            )
+              ? (
+                  (o.recommendation as Record<string, unknown>)
+                    .proposedLearningPlan as unknown[]
+                ).filter((s): s is string => typeof s === 'string')
+              : [],
+          }
+        : undefined,
     completedAt,
     createdAt: typeof o.createdAt === 'string' ? o.createdAt : '',
   }
@@ -130,6 +173,26 @@ export default function CoachHistoryPage() {
                   {a.correct} of {a.total} correct ({a.percentage.toFixed(1)}%) ·{' '}
                   {formatDate(a.completedAt)}
                 </p>
+                {a.recommendationStatus &&
+                  a.recommendationStatus !== 'NONE' &&
+                  a.recommendationStatus !== 'READY' && (
+                    <p className="mt-2 text-xs text-[var(--docs-muted)]">
+                      Recommendation status: {a.recommendationStatus.toLowerCase()}
+                    </p>
+                  )}
+                {a.recommendation && (
+                  <div className="mt-3 rounded border border-[var(--docs-border)] bg-white p-3 text-sm">
+                    <p className="font-medium text-[var(--docs-text)]">Learning plan</p>
+                    <p className="mt-1 text-[var(--docs-text)]">{a.recommendation.summary}</p>
+                    {a.recommendation.suggestedTopics.length > 0 && (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--docs-text)]">
+                        {a.recommendation.suggestedTopics.map((topic) => (
+                          <li key={topic}>{topic}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

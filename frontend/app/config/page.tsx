@@ -19,8 +19,12 @@ import {
   reindexPersonaDocument,
   deletePersonaDocument,
   generatePersonaQuestions,
+  fetchCoachGenerationConfigs,
+  updateCoachGenerationConfig,
+  runCoachGenerationNow,
   type AccessRequestView,
   type AdminDocumentView,
+  type CoachGenerationConfigView,
   type GeneratedQuestionView,
   type UserView,
 } from '@/lib/admin'
@@ -53,6 +57,13 @@ type UserFormState = {
   displayName: string
   role: 'ADMIN' | 'BASIC' | 'PREMIUM'
   registered: boolean
+}
+
+type CoachGenerationDraft = {
+  enabled: boolean
+  personaId: string
+  targetPoolSize: number
+  intervalMinutes: number
 }
 
 export default function ConfigPage() {
@@ -98,6 +109,12 @@ export default function ConfigPage() {
   const [genQuestionsLoading, setGenQuestionsLoading] = useState(false)
   const [genQuestionsError, setGenQuestionsError] = useState<string | null>(null)
   const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestionView[]>([])
+  const [coachGenConfigs, setCoachGenConfigs] = useState<CoachGenerationConfigView[]>([])
+  const [coachGenDrafts, setCoachGenDrafts] = useState<Record<string, CoachGenerationDraft>>({})
+  const [coachGenLoading, setCoachGenLoading] = useState(false)
+  const [coachGenError, setCoachGenError] = useState<string | null>(null)
+  const [coachGenSavingExam, setCoachGenSavingExam] = useState<string | null>(null)
+  const [coachGenRunningExam, setCoachGenRunningExam] = useState<string | null>(null)
 
   useEffect(() => {
     setOrigin(window.location.origin)
@@ -437,6 +454,80 @@ export default function ConfigPage() {
     setGeneratedQuestions(result.questions)
   }, [genQuestionsPersonaId, genQuestionsCount, genQuestionsExamCode, genQuestionsSaveToPool])
 
+  const loadCoachGenerationConfigs = useCallback(async () => {
+    setCoachGenLoading(true)
+    setCoachGenError(null)
+    const result = await fetchCoachGenerationConfigs()
+    if (!result) {
+      setCoachGenError('Failed to load generation job configs.')
+      setCoachGenConfigs([])
+      setCoachGenLoading(false)
+      return
+    }
+    setCoachGenConfigs(result.configs)
+    setCoachGenDrafts((prev) => {
+      const next = { ...prev }
+      for (const cfg of result.configs) {
+        if (!next[cfg.examCode]) {
+          next[cfg.examCode] = {
+            enabled: cfg.enabled,
+            personaId: cfg.personaId,
+            targetPoolSize: cfg.targetPoolSize,
+            intervalMinutes: cfg.intervalMinutes,
+          }
+        }
+      }
+      return next
+    })
+    setCoachGenLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'generate-questions') void loadCoachGenerationConfigs()
+  }, [activeTab, loadCoachGenerationConfigs])
+
+  const updateCoachDraft = useCallback((examCode: string, patch: Partial<CoachGenerationDraft>) => {
+    setCoachGenDrafts((prev) => {
+      const current = prev[examCode]
+      if (!current) return prev
+      return {
+        ...prev,
+        [examCode]: { ...current, ...patch },
+      }
+    })
+  }, [])
+
+  const saveCoachGenerationConfig = useCallback(async (examCode: string) => {
+    const draft = coachGenDrafts[examCode]
+    if (!draft) return
+    setCoachGenSavingExam(examCode)
+    setCoachGenError(null)
+    const updated = await updateCoachGenerationConfig(examCode, {
+      enabled: draft.enabled,
+      personaId: draft.personaId,
+      targetPoolSize: Math.max(25, draft.targetPoolSize),
+      intervalMinutes: Math.max(1, draft.intervalMinutes),
+    })
+    setCoachGenSavingExam(null)
+    if (!updated) {
+      setCoachGenError(`Failed to save ${examCode} config.`)
+      return
+    }
+    await loadCoachGenerationConfigs()
+  }, [coachGenDrafts, loadCoachGenerationConfigs])
+
+  const runCoachGeneration = useCallback(async (examCode: string) => {
+    setCoachGenRunningExam(examCode)
+    setCoachGenError(null)
+    const updated = await runCoachGenerationNow(examCode)
+    setCoachGenRunningExam(null)
+    if (!updated) {
+      setCoachGenError(`Failed to queue ${examCode} generation.`)
+      return
+    }
+    await loadCoachGenerationConfigs()
+  }, [loadCoachGenerationConfigs])
+
   const copyGeneratedQuestionsJson = useCallback(() => {
     const json = JSON.stringify(generatedQuestions, null, 2)
     void navigator.clipboard.writeText(json)
@@ -657,6 +748,150 @@ export default function ConfigPage() {
                   ))}
                 </div>
               )}
+
+              <div className="mt-8">
+                <h3 className="text-base font-medium text-[var(--docs-text)]">
+                  Background exam pool generation
+                </h3>
+                <p className="mb-3 text-sm text-[var(--docs-muted)]">
+                  Admin-managed async jobs generate exam pools in fixed 25-question chunks. Use Run now to queue immediate chunked generation until target pool size is reached.
+                </p>
+                <div className="docs-path mb-3 inline-block">
+                  GET/PUT /api/admin/coach/generation/configs · POST /api/admin/coach/generation/configs/:examCode/run
+                </div>
+                {coachGenError && (
+                  <p className="mb-2 text-sm text-red-600" role="alert">
+                    {coachGenError}
+                  </p>
+                )}
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={() => void loadCoachGenerationConfigs()}
+                    disabled={coachGenLoading}
+                    className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
+                  >
+                    {coachGenLoading ? 'Refreshing…' : 'Refresh jobs'}
+                  </button>
+                </div>
+                <div className="overflow-hidden rounded-lg border border-[var(--docs-border)] bg-white">
+                  {coachGenLoading && coachGenConfigs.length === 0 ? (
+                    <div className="p-4 text-sm text-[var(--docs-muted)]">Loading generation jobs…</div>
+                  ) : coachGenConfigs.length === 0 ? (
+                    <div className="p-4 text-sm text-[var(--docs-muted)]">No generation configs found.</div>
+                  ) : (
+                    <table className="min-w-full divide-y divide-[var(--docs-border)]">
+                      <thead className="bg-[var(--docs-code-bg)]">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Exam</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Enabled</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Persona</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Pool</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Target</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Interval (min)</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Status</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--docs-border)]">
+                        {coachGenConfigs.map((cfg) => {
+                          const draft = coachGenDrafts[cfg.examCode] ?? {
+                            enabled: cfg.enabled,
+                            personaId: cfg.personaId,
+                            targetPoolSize: cfg.targetPoolSize,
+                            intervalMinutes: cfg.intervalMinutes,
+                          }
+                          return (
+                            <tr key={cfg.examCode}>
+                              <td className="px-3 py-3 text-sm font-medium text-[var(--docs-text)]">
+                                {cfg.examCode}
+                                <p className="text-xs text-[var(--docs-muted)]">Chunk size: {cfg.chunkSize}</p>
+                              </td>
+                              <td className="px-3 py-3 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={draft.enabled}
+                                  onChange={(e) => updateCoachDraft(cfg.examCode, { enabled: e.target.checked })}
+                                  className="h-4 w-4 rounded border-[var(--docs-border)]"
+                                />
+                              </td>
+                              <td className="px-3 py-3 text-sm">
+                                <select
+                                  value={draft.personaId}
+                                  onChange={(e) => updateCoachDraft(cfg.examCode, { personaId: e.target.value })}
+                                  className="rounded border border-[var(--docs-border)] bg-white px-2 py-1 text-xs"
+                                >
+                                  {personas.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-3 py-3 text-sm text-[var(--docs-muted)]">
+                                {cfg.currentPoolSize}
+                              </td>
+                              <td className="px-3 py-3 text-sm">
+                                <input
+                                  type="number"
+                                  min={25}
+                                  max={5000}
+                                  value={draft.targetPoolSize}
+                                  onChange={(e) =>
+                                    updateCoachDraft(cfg.examCode, {
+                                      targetPoolSize: Math.max(25, parseInt(e.target.value, 10) || 25),
+                                    })
+                                  }
+                                  className="w-20 rounded border border-[var(--docs-border)] bg-white px-2 py-1 text-xs"
+                                />
+                              </td>
+                              <td className="px-3 py-3 text-sm">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={1440}
+                                  value={draft.intervalMinutes}
+                                  onChange={(e) =>
+                                    updateCoachDraft(cfg.examCode, {
+                                      intervalMinutes: Math.max(1, parseInt(e.target.value, 10) || 1),
+                                    })
+                                  }
+                                  className="w-20 rounded border border-[var(--docs-border)] bg-white px-2 py-1 text-xs"
+                                />
+                              </td>
+                              <td className="px-3 py-3 text-xs text-[var(--docs-muted)]">
+                                <p>{cfg.running ? 'RUNNING' : (cfg.lastStatus ?? '—')}</p>
+                                <p>{cfg.lastMessage ?? '—'}</p>
+                                <p>Next: {formatDate(cfg.nextRunAt)}</p>
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void saveCoachGenerationConfig(cfg.examCode)}
+                                    disabled={coachGenSavingExam === cfg.examCode}
+                                    className="rounded-lg border border-[var(--docs-border)] bg-white px-2 py-1 text-xs font-medium text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
+                                  >
+                                    {coachGenSavingExam === cfg.examCode ? 'Saving…' : 'Save'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void runCoachGeneration(cfg.examCode)}
+                                    disabled={coachGenRunningExam === cfg.examCode}
+                                    className="rounded-lg bg-[var(--docs-accent)] px-2 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                                  >
+                                    {coachGenRunningExam === cfg.examCode ? 'Queueing…' : 'Run now'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
             </section>
           )}
 

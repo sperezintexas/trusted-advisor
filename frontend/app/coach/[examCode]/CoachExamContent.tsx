@@ -4,8 +4,10 @@ import AppHeader from '../../components/AppHeader'
 import QuestionCard from './components/QuestionCard'
 import AnswerButtons from './components/AnswerButtons'
 import type {
+  LearningPlanRecommendation,
   PracticeExamQuestion,
   PracticeSessionResponse,
+  RecommendationStatus,
   ScoreResponse,
   ChoiceLetter,
   ExamCode,
@@ -19,9 +21,25 @@ import { useParams, useRouter } from 'next/navigation'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 const VALID_EXAM_CODES: ExamCode[] = ['SIE', 'SERIES_7', 'SERIES_57', 'SERIES_65']
+const VALID_RECOMMENDATION_STATUS = [
+  'NONE',
+  'QUEUED',
+  'PROCESSING',
+  'READY',
+  'FAILED',
+] as const
 
 function isExamCode(s: string): s is ExamCode {
   return VALID_EXAM_CODES.includes(s as ExamCode)
+}
+
+function toRecommendationStatus(raw: unknown): RecommendationStatus | undefined {
+  if (typeof raw !== 'string') return undefined
+  return VALID_RECOMMENDATION_STATUS.includes(
+    raw as (typeof VALID_RECOMMENDATION_STATUS)[number]
+  )
+    ? (raw as RecommendationStatus)
+    : undefined
 }
 
 function toPracticeQuestion(raw: unknown): PracticeExamQuestion | null {
@@ -93,6 +111,32 @@ function toAttempt(raw: unknown): CoachExamAttempt | null {
     total: typeof o.total === 'number' ? o.total : 0,
     percentage: typeof o.percentage === 'number' ? o.percentage : 0,
     passed: o.passed === true,
+    recommendationStatus: toRecommendationStatus(o.recommendationStatus),
+    recommendation:
+      typeof o.recommendation === 'object' && o.recommendation !== null
+        ? {
+            summary:
+              typeof (o.recommendation as Record<string, unknown>).summary === 'string'
+                ? ((o.recommendation as Record<string, unknown>).summary as string)
+                : '',
+            suggestedTopics: Array.isArray(
+              (o.recommendation as Record<string, unknown>).suggestedTopics
+            )
+              ? (
+                  (o.recommendation as Record<string, unknown>)
+                    .suggestedTopics as unknown[]
+                ).filter((t): t is string => typeof t === 'string')
+              : [],
+            proposedLearningPlan: Array.isArray(
+              (o.recommendation as Record<string, unknown>).proposedLearningPlan
+            )
+              ? (
+                  (o.recommendation as Record<string, unknown>)
+                    .proposedLearningPlan as unknown[]
+                ).filter((s): s is string => typeof s === 'string')
+              : [],
+          }
+        : undefined,
     completedAt: typeof o.completedAt === 'string' ? o.completedAt : '',
     createdAt: typeof o.createdAt === 'string' ? o.createdAt : '',
   }
@@ -137,6 +181,9 @@ export default function CoachExamContent() {
   const [answers, setAnswers] = useState<Record<string, ChoiceLetter>>({})
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState(0)
   const [score, setScore] = useState<ScoreResponse | null>(null)
+  const [learningPlan, setLearningPlan] = useState<LearningPlanRecommendation | null>(
+    null
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [attemptHistory, setAttemptHistory] = useState<CoachExamAttempt[]>([])
@@ -216,7 +263,11 @@ export default function CoachExamContent() {
         percentage: data.percentage ?? 0,
         passed: data.passed ?? false,
         passingPercentage: data.passingPercentage ?? 70,
+        recommendation: undefined,
+        recommendationStatus: toRecommendationStatus(data.recommendationStatus),
+        recommendationJobSubmitted: data.recommendationJobSubmitted === true,
       })
+      setLearningPlan(null)
       setPhase('results')
     },
     [examCode, session, answers]
@@ -474,6 +525,13 @@ export default function CoachExamContent() {
                       {' · '}
                       {a.correct}/{a.total} ({a.percentage.toFixed(1)}%) ·{' '}
                       {formatAttemptDate(a.completedAt)}
+                      {a.recommendationStatus &&
+                        a.recommendationStatus !== 'NONE' &&
+                        a.recommendationStatus !== 'READY' && (
+                          <span className="ml-2 text-xs text-[var(--docs-muted)]">
+                            ({a.recommendationStatus.toLowerCase()})
+                          </span>
+                        )}
                     </li>
                   ))}
                 </ul>
@@ -675,6 +733,11 @@ export default function CoachExamContent() {
               {score.percentage.toFixed(1)}%). Passing score is{' '}
               {score.passingPercentage}%.
             </p>
+            {score.recommendationJobSubmitted && (
+              <p className="mt-3 rounded-md border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-muted)]">
+                Recommendation job submitted. Your personalized learning plan will be available in exam history shortly.
+              </p>
+            )}
             <Link
               href="/coach"
               className="mt-6 inline-block text-[var(--docs-accent)] hover:underline"
@@ -687,12 +750,49 @@ export default function CoachExamContent() {
                 setPhase('start')
                 setSession(null)
                 setScore(null)
+                setLearningPlan(null)
                 setError(null)
               }}
               className="ml-4 rounded-lg border border-[var(--docs-border)] px-4 py-2 text-sm text-[var(--docs-text)]"
             >
               Take another practice exam
             </button>
+            {learningPlan && (
+              <div className="mt-6 rounded-lg border border-[var(--docs-border)] bg-white p-4">
+                <h3 className="text-base font-semibold text-[var(--docs-text)]">
+                  Proposed learning plan
+                </h3>
+                {learningPlan.summary && (
+                  <p className="mt-2 text-sm text-[var(--docs-text)]">
+                    {learningPlan.summary}
+                  </p>
+                )}
+                {learningPlan.suggestedTopics.length > 0 && (
+                  <>
+                    <p className="mt-3 text-sm font-medium text-[var(--docs-muted)]">
+                      Suggested topics to review again
+                    </p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--docs-text)]">
+                      {learningPlan.suggestedTopics.map((topic) => (
+                        <li key={topic}>{topic}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {learningPlan.proposedLearningPlan.length > 0 && (
+                  <>
+                    <p className="mt-3 text-sm font-medium text-[var(--docs-muted)]">
+                      Study steps
+                    </p>
+                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-[var(--docs-text)]">
+                      {learningPlan.proposedLearningPlan.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>

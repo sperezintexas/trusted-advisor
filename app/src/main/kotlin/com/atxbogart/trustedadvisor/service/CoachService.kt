@@ -21,6 +21,11 @@ class CoachService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    data class ScoreEvaluationResult(
+        val score: ScoreResponse,
+        val missedTopics: List<String>
+    )
+
     fun getExams(): List<CoachExam> = examRepository.findAll()
 
     fun getPoolSize(examCode: ExamCode): Long = questionRepository.countByExamCodeAndActiveTrue(examCode)
@@ -138,26 +143,47 @@ class CoachService(
     }
 
     fun scorePracticeExam(examCode: ExamCode, answers: List<ScoreAnswerRequest>): ScoreResponse {
+        return scorePracticeExamDetailed(examCode, answers).score
+    }
+
+    fun scorePracticeExamDetailed(examCode: ExamCode, answers: List<ScoreAnswerRequest>): ScoreEvaluationResult {
         val passingPct = getPassingPercentage(examCode)
         var correct = 0
+        val missedTopicCounts = linkedMapOf<String, Int>()
         for (a in answers) {
             val letter = parseChoiceLetter(a.selectedLetter) ?: continue
             val question = questionRepository.findById(a.questionId).orElse(null) ?: continue
-            if (question.examCode == examCode && question.correctLetter == letter) correct++
+            if (question.examCode != examCode) continue
+            if (question.correctLetter == letter) {
+                correct++
+            } else {
+                val topic = question.topic?.takeIf { it.isNotBlank() } ?: "General review"
+                missedTopicCounts[topic] = (missedTopicCounts[topic] ?: 0) + 1
+            }
         }
         val total = answers.size
         val percentage = if (total == 0) 0.0 else (correct * 100.0) / total
-        return ScoreResponse(
+        val score = ScoreResponse(
             correct = correct,
             total = total,
             percentage = percentage,
             passed = percentage >= passingPct,
             passingPercentage = passingPct
         )
+        val missedTopics = missedTopicCounts.entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+        return ScoreEvaluationResult(score = score, missedTopics = missedTopics)
     }
 
     /** Persists exam attempt and updates user progress. Call only when user completes and submits (not on cancel). */
-    fun savePracticeExamResult(userId: String, examCode: ExamCode, score: ScoreResponse) {
+    fun savePracticeExamResult(
+        userId: String,
+        examCode: ExamCode,
+        score: ScoreResponse,
+        missedTopics: List<String> = emptyList(),
+        recommendationStatus: RecommendationStatus = RecommendationStatus.NONE
+    ) {
         val now = LocalDateTime.now(ZoneOffset.UTC)
         examAttemptRepository.save(
             CoachExamAttempt(
@@ -167,6 +193,8 @@ class CoachService(
                 total = score.total,
                 percentage = score.percentage,
                 passed = score.passed,
+                missedTopics = missedTopics,
+                recommendationStatus = recommendationStatus,
                 completedAt = now,
                 createdAt = now
             )

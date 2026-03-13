@@ -13,6 +13,9 @@ import com.atxbogart.trustedadvisor.service.GeneratedQuestionView
 import com.atxbogart.trustedadvisor.service.GenerateQuestionsResult
 import com.atxbogart.trustedadvisor.service.PersonaFileResult
 import com.atxbogart.trustedadvisor.service.PersonaFileService
+import com.atxbogart.trustedadvisor.service.CoachGenerationConfigUpdate
+import com.atxbogart.trustedadvisor.service.CoachGenerationConfigView
+import com.atxbogart.trustedadvisor.service.CoachQuestionGenerationSchedulerService
 import com.atxbogart.trustedadvisor.service.QuestionGeneratorService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -34,7 +37,8 @@ class AdminController(
     private val accessRequestService: AccessRequestService,
     private val userRepository: UserRepository,
     private val personaFileService: PersonaFileService,
-    private val questionGeneratorService: QuestionGeneratorService
+    private val questionGeneratorService: QuestionGeneratorService,
+    private val coachQuestionGenerationSchedulerService: CoachQuestionGenerationSchedulerService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -491,6 +495,49 @@ class AdminController(
         }
     }
 
+    @GetMapping("/coach/generation/configs")
+    fun getCoachGenerationConfigs(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
+    ): ResponseEntity<CoachGenerationConfigListResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) return ResponseEntity.status(403).build()
+        val configs = coachQuestionGenerationSchedulerService.getConfigs()
+        return ResponseEntity.ok(CoachGenerationConfigListResponse(configs = configs))
+    }
+
+    @PutMapping("/coach/generation/configs/{examCode}")
+    fun updateCoachGenerationConfig(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable examCode: String,
+        @RequestBody body: CoachGenerationConfigUpdateRequest
+    ): ResponseEntity<CoachGenerationConfigView> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) return ResponseEntity.status(403).build()
+        val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
+        val updated = coachQuestionGenerationSchedulerService.updateConfig(
+            examCode = code,
+            update = CoachGenerationConfigUpdate(
+                enabled = body.enabled,
+                personaId = body.personaId,
+                targetPoolSize = body.targetPoolSize,
+                intervalMinutes = body.intervalMinutes
+            )
+        )
+        return ResponseEntity.ok(updated)
+    }
+
+    @PostMapping("/coach/generation/configs/{examCode}/run")
+    fun runCoachGenerationNow(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable examCode: String
+    ): ResponseEntity<CoachGenerationConfigView> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) return ResponseEntity.status(403).build()
+        val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
+        val updated = coachQuestionGenerationSchedulerService.runNow(code)
+        return ResponseEntity.ok(updated)
+    }
+
     private fun PersonaFile.toAdminDocumentView() = AdminDocumentView(
         id = id ?: "",
         personaId = personaId,
@@ -640,4 +687,15 @@ data class GenerateQuestionsResponse(
     val success: Boolean,
     val message: String,
     val questions: List<GeneratedQuestionView>
+)
+
+data class CoachGenerationConfigListResponse(
+    val configs: List<CoachGenerationConfigView>
+)
+
+data class CoachGenerationConfigUpdateRequest(
+    val enabled: Boolean? = null,
+    val personaId: String? = null,
+    val targetPoolSize: Int? = null,
+    val intervalMinutes: Int? = null
 )
