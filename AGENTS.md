@@ -93,3 +93,29 @@ Note: frontend `npm test` is currently a placeholder command that returns succes
 4. Push current branch to origin.
 
 If behavior changes, include a short note in commit message scope or PR summary about affected endpoints.
+
+## Cursor Cloud specific instructions
+
+### Environment variables and `.env`
+
+Cloud VMs inject secrets as environment variables (see Secrets pane). The backend and frontend both read a **repo-root `.env` file** at runtime. The update script auto-generates this file from injected env vars. Key caveat: the `MONGODB_URI` env var may itself be base64-encoded — the script decodes `MONGODB_URI_B64` and writes the plain URI.
+
+Required secrets (must be set in the Secrets pane):
+- `MONGODB_URI_B64` — base64-encoded MongoDB connection string
+- `XAI_API_KEY` — xAI / Grok API key
+- `AUTH_SECRET` — shared API key for frontend↔backend auth
+
+### Authentication in dev
+
+Set `APP_SKIP_AUTH=true` in `.env` to bypass OAuth login. This creates a synthetic `dev-user` session — useful when Google/GitHub OAuth is not configured.
+
+### Running services
+
+- **Backend:** `./gradlew bootRun` from repo root (port 8080). Health check: `curl localhost:8080/`
+- **Frontend:** `cd frontend && npm run dev` (port 3000). Proxies `/api/*` to backend via `next.config.mjs` rewrites.
+
+First Gradle run downloads the wrapper distribution (~180 MB) and all dependencies; subsequent runs use cache. The Kotlin daemon may log a benign "terminated unexpectedly on startup attempt #1" — this is normal and self-recovers.
+
+### Validation commands
+
+See AGENTS.md §4 above. All commands are standard; no cloud-specific overrides needed.
