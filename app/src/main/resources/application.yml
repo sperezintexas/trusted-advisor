@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: trusted-advisor
+  servlet:
+    multipart:
+      max-file-size: 75MB
+      max-request-size: 75MB
   data:
     mongodb:
       # URI from .env: MONGODB_URI or MONGODB_URI_B64 (decoded in App.kt). Database from MONGODB_DATABASE only.

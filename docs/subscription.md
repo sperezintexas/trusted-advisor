@@ -42,3 +42,4 @@ Trusted Advisor currently supports two plan tiers:
 
 - Detailed policy and API: `docs/subscription-model.md`
 - Test matrix and validation steps: `docs/subscription-test-cases.md`
+- Admin RAG ingestion (persona documents): `docs/rag-ingestion.md`

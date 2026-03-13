@@ -10,7 +10,14 @@ import {
   fetchAccessRequests,
   approveAccessRequest,
   rejectAccessRequest,
+  fetchPersonaDocuments,
+  uploadPersonaDocument,
+  reindexPersonaDocument,
+  deletePersonaDocument,
+  generatePersonaQuestions,
   type AccessRequestView,
+  type AdminDocumentView,
+  type GeneratedQuestionView,
 } from '@/lib/admin'
 
 type ChatConfig = {
@@ -31,7 +38,9 @@ type AuthDebug = {
   username: string | null
 }
 
-type ConfigTab = 'system' | 'access-requests'
+type ConfigTab = 'system' | 'access-requests' | 'rag-documents' | 'generate-questions'
+
+type Persona = { id: string; name: string; description?: string }
 
 export default function ConfigPage() {
   const { user } = useAuth()
@@ -48,6 +57,21 @@ export default function ConfigPage() {
   const [accessLoading, setAccessLoading] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null)
+  const [personas, setPersonas] = useState<Persona[]>([])
+  const [personasLoading, setPersonasLoading] = useState(true)
+  const [ragPersonaId, setRagPersonaId] = useState<string>('')
+  const [ragDocuments, setRagDocuments] = useState<AdminDocumentView[]>([])
+  const [ragDocumentsLoading, setRagDocumentsLoading] = useState(false)
+  const [ragError, setRagError] = useState<string | null>(null)
+  const [ragUploading, setRagUploading] = useState(false)
+  const [ragActionDocId, setRagActionDocId] = useState<string | null>(null)
+  const [genQuestionsPersonaId, setGenQuestionsPersonaId] = useState<string>('')
+  const [genQuestionsCount, setGenQuestionsCount] = useState(10)
+  const [genQuestionsExamCode, setGenQuestionsExamCode] = useState<string>('')
+  const [genQuestionsSaveToPool, setGenQuestionsSaveToPool] = useState(false)
+  const [genQuestionsLoading, setGenQuestionsLoading] = useState(false)
+  const [genQuestionsError, setGenQuestionsError] = useState<string | null>(null)
+  const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestionView[]>([])
 
   useEffect(() => {
     setOrigin(window.location.origin)
@@ -164,6 +188,146 @@ export default function ConfigPage() {
     void loadAccessRequests()
   }, [activeTab, loadAccessRequests])
 
+  const loadPersonas = useCallback(async () => {
+    setPersonasLoading(true)
+    try {
+      const res = await fetch(apiUrl('/personas'), defaultFetchOptions())
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = (await res.json()) as Persona[]
+      setPersonas(data)
+      setRagPersonaId((prev) => {
+        if (prev) return prev
+        if (data.length === 0) return ''
+        const fintech = data.find(
+          (p) =>
+            p.name.toLowerCase().includes('fintech') ||
+            p.name.toLowerCase().includes('advisor') ||
+            p.name.toLowerCase().includes('finance expert')
+        )
+        return fintech?.id ?? data[0].id
+      })
+      setGenQuestionsPersonaId((prev) => {
+        if (prev) return prev
+        if (data.length === 0) return ''
+        const financeExpert = data.find(
+          (p) =>
+            p.name.toLowerCase().includes('finance expert') ||
+            p.name.toLowerCase().includes('fintech') ||
+            p.name.toLowerCase().includes('advisor')
+        )
+        return financeExpert?.id ?? data[0].id
+      })
+    } catch {
+      setPersonas([])
+    } finally {
+      setPersonasLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadPersonas()
+  }, [loadPersonas])
+
+  const loadRagDocuments = useCallback(async () => {
+    if (!ragPersonaId) {
+      setRagDocuments([])
+      return
+    }
+    setRagDocumentsLoading(true)
+    setRagError(null)
+    const result = await fetchPersonaDocuments(ragPersonaId)
+    if (result === null) {
+      setRagError('Failed to load documents.')
+      setRagDocuments([])
+    } else {
+      setRagDocuments(result.documents)
+    }
+    setRagDocumentsLoading(false)
+  }, [ragPersonaId])
+
+  useEffect(() => {
+    if (activeTab === 'rag-documents' && ragPersonaId) void loadRagDocuments()
+  }, [activeTab, ragPersonaId, loadRagDocuments])
+
+  const handleRagUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file || !ragPersonaId) return
+      e.target.value = ''
+      setRagUploading(true)
+      setRagError(null)
+      const result = await uploadPersonaDocument(ragPersonaId, file)
+      setRagUploading(false)
+      if (!result) {
+        setRagError('Upload failed.')
+        return
+      }
+      if (!result.success) {
+        setRagError(result.message)
+        return
+      }
+      await loadRagDocuments()
+    },
+    [ragPersonaId, loadRagDocuments]
+  )
+
+  const handleRagReindex = useCallback(
+    async (docId: string) => {
+      if (!ragPersonaId) return
+      setRagActionDocId(docId)
+      setRagError(null)
+      const result = await reindexPersonaDocument(ragPersonaId, docId, '')
+      setRagActionDocId(null)
+      if (result?.success) void loadRagDocuments()
+      else if (result && !result.success) setRagError(result.message)
+    },
+    [ragPersonaId, loadRagDocuments]
+  )
+
+  const handleRagDelete = useCallback(
+    async (docId: string) => {
+      if (!ragPersonaId) return
+      if (!confirm('Delete this document and its chunks?')) return
+      setRagActionDocId(docId)
+      setRagError(null)
+      const result = await deletePersonaDocument(ragPersonaId, docId)
+      setRagActionDocId(null)
+      if (result?.success) void loadRagDocuments()
+      else if (result && !result.success) setRagError(result.message)
+    },
+    [ragPersonaId, loadRagDocuments]
+  )
+
+  const handleGenerateQuestions = useCallback(async () => {
+    if (!genQuestionsPersonaId) return
+    setGenQuestionsLoading(true)
+    setGenQuestionsError(null)
+    setGeneratedQuestions([])
+    const result = await generatePersonaQuestions(
+      genQuestionsPersonaId,
+      genQuestionsCount,
+      {
+        examCode: genQuestionsExamCode || undefined,
+        saveToPool: genQuestionsSaveToPool && !!genQuestionsExamCode,
+      }
+    )
+    setGenQuestionsLoading(false)
+    if (!result) {
+      setGenQuestionsError('Request failed.')
+      return
+    }
+    if (!result.success) {
+      setGenQuestionsError(result.message)
+      return
+    }
+    setGeneratedQuestions(result.questions)
+  }, [genQuestionsPersonaId, genQuestionsCount, genQuestionsExamCode, genQuestionsSaveToPool])
+
+  const copyGeneratedQuestionsJson = useCallback(() => {
+    const json = JSON.stringify(generatedQuestions, null, 2)
+    void navigator.clipboard.writeText(json)
+  }, [generatedQuestions])
+
   const formatDate = (dateStr: string): string => {
     const parsed = new Date(dateStr)
     if (Number.isNaN(parsed.getTime())) return dateStr
@@ -217,7 +381,286 @@ export default function ConfigPage() {
             >
               Access Requests
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('rag-documents')}
+              className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+                activeTab === 'rag-documents'
+                  ? 'border border-b-0 border-[var(--docs-border)] bg-white text-[var(--docs-text)]'
+                  : 'text-[var(--docs-muted)] hover:text-[var(--docs-text)]'
+              }`}
+            >
+              RAG Documents
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('generate-questions')}
+              className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+                activeTab === 'generate-questions'
+                  ? 'border border-b-0 border-[var(--docs-border)] bg-white text-[var(--docs-text)]'
+                  : 'text-[var(--docs-muted)] hover:text-[var(--docs-text)]'
+              }`}
+            >
+              Generate Questions
+            </button>
           </div>
+
+          {activeTab === 'generate-questions' && (
+            <section className="mb-12">
+              <div className="mb-3">
+                <h2 className="text-lg font-medium text-[var(--docs-text)]">
+                  Generate test questions
+                </h2>
+                <p className="text-sm text-[var(--docs-muted)]">
+                  Generate multiple-choice practice questions from the indexed RAG documents. Select an exam to tag questions by FINRA topic and save to the practice exam pool; practice exams then draw from the pool by topic %.
+                </p>
+              </div>
+              <div className="docs-path mb-3 inline-block">
+                POST /api/admin/personas/:personaId/generate-questions
+              </div>
+              {genQuestionsError && (
+                <p className="mb-2 text-sm text-red-600" role="alert">
+                  {genQuestionsError}
+                </p>
+              )}
+              <div className="mb-4 flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-[var(--docs-text)]">
+                  Persona:
+                  <select
+                    value={genQuestionsPersonaId}
+                    onChange={(e) => setGenQuestionsPersonaId(e.target.value)}
+                    disabled={personasLoading}
+                    className="rounded border border-[var(--docs-border)] bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">Select persona</option>
+                    {personas.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-[var(--docs-text)]">
+                  Exam (for topic % and pool):
+                  <select
+                    value={genQuestionsExamCode}
+                    onChange={(e) => setGenQuestionsExamCode(e.target.value)}
+                    className="rounded border border-[var(--docs-border)] bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">None (preview only)</option>
+                    <option value="SIE">SIE</option>
+                    <option value="SERIES_7">Series 7</option>
+                    <option value="SERIES_57">Series 57</option>
+                    <option value="SERIES_65">Series 65</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-[var(--docs-text)]">
+                  Number of questions:
+                  <input
+                    type="number"
+                    min={1}
+                    max={25}
+                    value={genQuestionsCount}
+                    onChange={(e) =>
+                      setGenQuestionsCount(
+                        Math.min(25, Math.max(1, parseInt(e.target.value, 10) || 10))
+                      )
+                    }
+                    className="w-20 rounded border border-[var(--docs-border)] bg-white px-2 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--docs-text)]">
+                  <input
+                    type="checkbox"
+                    checked={genQuestionsSaveToPool}
+                    onChange={(e) => setGenQuestionsSaveToPool(e.target.checked)}
+                    disabled={!genQuestionsExamCode}
+                    className="h-4 w-4 rounded border-[var(--docs-border)]"
+                  />
+                  Save to exam pool
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateQuestions()}
+                  disabled={!genQuestionsPersonaId || genQuestionsLoading}
+                  className="rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
+                >
+                  {genQuestionsLoading ? 'Generating…' : 'Generate'}
+                </button>
+                {generatedQuestions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={copyGeneratedQuestionsJson}
+                    className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)]"
+                  >
+                    Copy JSON
+                  </button>
+                )}
+              </div>
+              {generatedQuestions.length > 0 && (
+                <div className="space-y-6 rounded-lg border border-[var(--docs-border)] bg-white p-4">
+                  <h3 className="text-sm font-medium text-[var(--docs-muted)]">
+                    Generated questions ({generatedQuestions.length})
+                  </h3>
+                  {generatedQuestions.map((q, idx) => (
+                    <div
+                      key={idx}
+                      className="border-b border-[var(--docs-border)] pb-4 last:border-b-0 last:pb-0"
+                    >
+                      <p className="mb-2 font-medium text-[var(--docs-text)]">
+                        {idx + 1}. {q.question}
+                      </p>
+                      <ul className="mb-2 list-inside list-disc text-sm text-[var(--docs-muted)]">
+                        {q.choices.map((c) => (
+                          <li key={c.letter}>
+                            <span className={c.letter === q.correctLetter ? 'font-medium text-green-700' : ''}>
+                              {c.letter}. {c.text}
+                              {c.letter === q.correctLetter ? ' ✓' : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      {q.topic && (
+                        <p className="mb-1 text-xs text-[var(--docs-muted)]">
+                          <strong>Topic:</strong> {q.topic}
+                        </p>
+                      )}
+                      <p className="text-xs text-[var(--docs-muted)]">
+                        <strong>Explanation:</strong> {q.explanation}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'rag-documents' && (
+            <section className="mb-12">
+              <div className="mb-3">
+                <h2 className="text-lg font-medium text-[var(--docs-text)]">
+                  RAG Documents
+                </h2>
+                <p className="text-sm text-[var(--docs-muted)]">
+                  Upload and index PDF, text, or markdown files for the selected persona. Chunks are used as context in chat.
+                </p>
+              </div>
+              <div className="docs-path mb-3 inline-block">
+                GET/POST /api/admin/personas/:personaId/documents · POST .../documents/:docId/index · DELETE .../documents/:docId
+              </div>
+              {ragError && (
+                <p className="mb-2 text-sm text-red-600" role="alert">
+                  {ragError}
+                </p>
+              )}
+              <div className="mb-4 flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-[var(--docs-text)]">
+                  Persona:
+                  <select
+                    value={ragPersonaId}
+                    onChange={(e) => setRagPersonaId(e.target.value)}
+                    disabled={personasLoading}
+                    className="rounded border border-[var(--docs-border)] bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">Select persona</option>
+                    {personas.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="cursor-pointer rounded-lg border border-[var(--docs-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50">
+                  <input
+                    type="file"
+                    accept=".txt,.md,.markdown,.pdf,text/plain,text/markdown,application/pdf"
+                    className="sr-only"
+                    onChange={handleRagUpload}
+                    disabled={!ragPersonaId || ragUploading}
+                  />
+                  {ragUploading ? 'Uploading…' : 'Upload file'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void loadRagDocuments()}
+                  disabled={ragDocumentsLoading || !ragPersonaId}
+                  className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
+                >
+                  {ragDocumentsLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-lg border border-[var(--docs-border)] bg-white">
+                {ragDocumentsLoading && !ragDocuments.length ? (
+                  <div className="p-4 text-sm text-[var(--docs-muted)]">
+                    Loading documents…
+                  </div>
+                ) : !ragPersonaId ? (
+                  <div className="p-4 text-sm text-[var(--docs-muted)]">
+                    Select a persona to list documents.
+                  </div>
+                ) : ragDocuments.length === 0 ? (
+                  <div className="p-4 text-sm text-[var(--docs-muted)]">
+                    No documents. Upload a .txt, .md, or .pdf file.
+                  </div>
+                ) : (
+                  <table className="min-w-full divide-y divide-[var(--docs-border)]">
+                    <thead className="bg-[var(--docs-code-bg)]">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Name</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Chunks</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Indexed</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--docs-border)]">
+                      {ragDocuments.map((doc) => (
+                        <tr key={doc.id}>
+                          <td className="px-4 py-3 text-sm font-medium text-[var(--docs-text)]">
+                            {doc.name}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
+                            {doc.status}
+                            {doc.lastError && (
+                              <span className="ml-1 text-red-600" title={doc.lastError}>
+                                (!)
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
+                            {doc.chunkCount}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
+                            {formatDate(doc.updatedAt)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleRagReindex(doc.id)}
+                                disabled={ragActionDocId === doc.id || doc.status !== 'INDEXED'}
+                                className="rounded-lg border border-[var(--docs-border)] bg-white px-2 py-1 text-xs font-medium text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
+                              >
+                                Reindex
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleRagDelete(doc.id)}
+                                disabled={ragActionDocId === doc.id}
+                                className="rounded-lg bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </section>
+          )}
 
           {activeTab === 'access-requests' && (
             <section className="mb-12">

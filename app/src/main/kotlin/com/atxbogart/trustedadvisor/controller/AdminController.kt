@@ -2,11 +2,18 @@ package com.atxbogart.trustedadvisor.controller
 
 import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import com.atxbogart.trustedadvisor.model.AccessRequest
+import com.atxbogart.trustedadvisor.model.ExamCode
+import com.atxbogart.trustedadvisor.model.PersonaFile
 import com.atxbogart.trustedadvisor.model.User
 import com.atxbogart.trustedadvisor.model.UserRole
 import com.atxbogart.trustedadvisor.repository.UserRepository
 import com.atxbogart.trustedadvisor.service.AccessRequestResult
 import com.atxbogart.trustedadvisor.service.AccessRequestService
+import com.atxbogart.trustedadvisor.service.GeneratedQuestionView
+import com.atxbogart.trustedadvisor.service.GenerateQuestionsResult
+import com.atxbogart.trustedadvisor.service.PersonaFileResult
+import com.atxbogart.trustedadvisor.service.PersonaFileService
+import com.atxbogart.trustedadvisor.service.QuestionGeneratorService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
@@ -15,6 +22,7 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken
 import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.multipart.MultipartFile
 
 @RestController
 @RequestMapping("/api/admin")
@@ -22,7 +30,9 @@ class AdminController(
     @Value("\${app.skip-auth:false}") private val skipAuth: Boolean,
     @Value("\${app.admin-emails:}") private val adminEmailsConfig: String,
     private val accessRequestService: AccessRequestService,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val personaFileService: PersonaFileService,
+    private val questionGeneratorService: QuestionGeneratorService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -223,6 +233,140 @@ class AdminController(
         )
     }
 
+    @GetMapping("/personas/{personaId}/documents")
+    fun listPersonaDocuments(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable personaId: String
+    ): ResponseEntity<AdminDocumentListResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+        return when (val result = personaFileService.getFilesForPersona(personaId)) {
+            is PersonaFileResult.FileList -> ResponseEntity.ok(
+                AdminDocumentListResponse(documents = result.files.map { it.toAdminDocumentView() })
+            )
+            is PersonaFileResult.PersonaNotFound -> ResponseEntity.notFound().build()
+            else -> ResponseEntity.badRequest().build()
+        }
+    }
+
+    @PostMapping("/personas/{personaId}/documents")
+    fun uploadPersonaDocument(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable personaId: String,
+        @RequestParam("file") file: MultipartFile
+    ): ResponseEntity<AdminDocumentResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+        if (file.isEmpty) {
+            return ResponseEntity.badRequest().body(
+                AdminDocumentResponse(success = false, message = "File is empty", document = null)
+            )
+        }
+        val bytes = file.bytes
+        val filename = file.originalFilename ?: "document"
+        val contentType = file.contentType
+        return when (val result = personaFileService.addFileFromUpload(personaId, filename, bytes, contentType, email)) {
+            is PersonaFileResult.Success -> ResponseEntity.ok(
+                AdminDocumentResponse(success = true, message = "Document uploaded and indexed", document = result.file.toAdminDocumentView())
+            )
+            is PersonaFileResult.PersonaNotFound -> ResponseEntity.notFound().build()
+            is PersonaFileResult.Error -> ResponseEntity.badRequest().body(
+                AdminDocumentResponse(success = false, message = result.message, document = null)
+            )
+            else -> ResponseEntity.badRequest().build()
+        }
+    }
+
+    @PostMapping("/personas/{personaId}/documents/{docId}/index")
+    fun reindexPersonaDocument(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable personaId: String,
+        @PathVariable docId: String,
+        @RequestBody(required = false) body: ReindexRequestBody?
+    ): ResponseEntity<AdminDocumentResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+        val content = body?.content
+        val result = if (!content.isNullOrBlank()) {
+            personaFileService.indexFileContent(docId, content)
+        } else {
+            personaFileService.reindexFromStoredChunks(docId)
+        }
+        return when (result) {
+            is PersonaFileResult.Success -> ResponseEntity.ok(
+                AdminDocumentResponse(success = true, message = "Document reindexed", document = result.file.toAdminDocumentView())
+            )
+            is PersonaFileResult.NotFound -> ResponseEntity.notFound().build()
+            is PersonaFileResult.Error -> ResponseEntity.badRequest().body(
+                AdminDocumentResponse(success = false, message = result.message, document = null)
+            )
+            else -> ResponseEntity.badRequest().build()
+        }
+    }
+
+    @DeleteMapping("/personas/{personaId}/documents/{docId}")
+    fun deletePersonaDocument(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable personaId: String,
+        @PathVariable docId: String
+    ): ResponseEntity<AdminDocumentResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+        return when (val result = personaFileService.removeFile(docId, email)) {
+            is PersonaFileResult.Success -> ResponseEntity.ok(
+                AdminDocumentResponse(success = true, message = "Document deleted", document = result.file.toAdminDocumentView())
+            )
+            is PersonaFileResult.NotFound -> ResponseEntity.notFound().build()
+            else -> ResponseEntity.badRequest().build()
+        }
+    }
+
+    @PostMapping("/personas/{personaId}/generate-questions")
+    fun generateQuestions(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable personaId: String,
+        @RequestBody(required = false) body: GenerateQuestionsRequestBody?
+    ): ResponseEntity<GenerateQuestionsResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+        val count = (body?.count ?: 10).coerceIn(1, 25)
+        val examCode = body?.examCode?.let { parseExamCode(it) }
+        val saveToPool = body?.saveToPool == true && examCode != null
+        return when (val result = questionGeneratorService.generateQuestions(personaId, count, examCode, saveToPool)) {
+            is GenerateQuestionsResult.Success -> ResponseEntity.ok(
+                GenerateQuestionsResponse(success = true, message = "Generated ${result.questions.size} questions", questions = result.questions)
+            )
+            is GenerateQuestionsResult.NoContext -> ResponseEntity.badRequest().body(
+                GenerateQuestionsResponse(success = false, message = result.message, questions = emptyList())
+            )
+            is GenerateQuestionsResult.Error -> ResponseEntity.badRequest().body(
+                GenerateQuestionsResponse(success = false, message = result.message, questions = emptyList())
+            )
+        }
+    }
+
+    private fun PersonaFile.toAdminDocumentView() = AdminDocumentView(
+        id = id ?: "",
+        personaId = personaId,
+        name = name,
+        status = status.name,
+        lastError = lastError,
+        chunkCount = chunkCount,
+        sizeBytes = sizeBytes,
+        createdAt = createdAt.toString(),
+        updatedAt = updatedAt.toString()
+    )
+
     private fun AccessRequest.toView() = AccessRequestView(
         id = id ?: "",
         email = email,
@@ -236,6 +380,14 @@ class AdminController(
         createdAt = createdAt.toString(),
         reviewedAt = reviewedAt?.toString()
     )
+
+    private fun parseExamCode(s: String?): ExamCode? = when (s?.uppercase()) {
+        "SIE" -> ExamCode.SIE
+        "SERIES_7", "SERIES7" -> ExamCode.SERIES_7
+        "SERIES_57", "SERIES57" -> ExamCode.SERIES_57
+        "SERIES_65", "SERIES65" -> ExamCode.SERIES_65
+        else -> null
+    }
 
     private fun User.toView() = UserView(
         id = id ?: "",
@@ -290,4 +442,42 @@ data class UserView(
 data class UserListResponse(
     val users: List<UserView>,
     val total: Int
+)
+
+data class AdminDocumentView(
+    val id: String,
+    val personaId: String,
+    val name: String,
+    val status: String,
+    val lastError: String?,
+    val chunkCount: Int,
+    val sizeBytes: Long?,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+data class AdminDocumentListResponse(
+    val documents: List<AdminDocumentView>
+)
+
+data class AdminDocumentResponse(
+    val success: Boolean,
+    val message: String,
+    val document: AdminDocumentView?
+)
+
+data class ReindexRequestBody(
+    val content: String? = null
+)
+
+data class GenerateQuestionsRequestBody(
+    val count: Int? = 10,
+    val examCode: String? = null,
+    val saveToPool: Boolean? = null
+)
+
+data class GenerateQuestionsResponse(
+    val success: Boolean,
+    val message: String,
+    val questions: List<GeneratedQuestionView>
 )

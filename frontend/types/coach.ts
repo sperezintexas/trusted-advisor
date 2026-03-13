@@ -126,3 +126,32 @@ export const EXAM_CONFIG: Record<
   SERIES_57: { questionCount: 50, timeMinutes: 90 },
   SERIES_65: { questionCount: 130, timeMinutes: 180 },
 }
+
+/** FINRA-aligned topic breakdown (% of questions by topic) for exam summary. */
+export type ExamTopicBreakdown = { topic: string; weightPercent: number }
+
+export const EXAM_BREAKDOWN: Record<ExamCode, ExamTopicBreakdown[]> = {
+  SIE: [
+    { topic: 'Knowledge of Capital Markets', weightPercent: 16 },
+    { topic: 'Understanding Products and Their Risks', weightPercent: 44 },
+    { topic: 'Understanding Trading, Customer Accounts and Prohibited Activities', weightPercent: 31 },
+    { topic: 'Overview of the Regulatory Framework', weightPercent: 9 },
+  ],
+  SERIES_7: [
+    { topic: 'Seeks Business for the Broker-Dealer', weightPercent: 7 },
+    { topic: 'Opens Accounts and Evaluates Financial Profile', weightPercent: 9 },
+    { topic: 'Provides Information, Recommendations, Transfers Assets', weightPercent: 73 },
+    { topic: 'Obtains and Verifies Instructions; Processes Transactions', weightPercent: 11 },
+  ],
+  SERIES_57: [
+    { topic: 'Trading Activities', weightPercent: 82 },
+    { topic: 'Books and Records, Trade Reporting and Settlement', weightPercent: 18 },
+  ],
+  SERIES_65: [
+    { topic: 'Regulations and Laws', weightPercent: 22 },
+    { topic: 'Ethics and Fiduciary Duty', weightPercent: 20 },
+    { topic: 'Investment Vehicles', weightPercent: 22 },
+    { topic: 'Client Strategies and Economic Factors', weightPercent: 20 },
+    { topic: 'Communications and Documentation', weightPercent: 16 },
+  ],
+}

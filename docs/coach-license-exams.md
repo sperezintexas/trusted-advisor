@@ -45,7 +45,8 @@ Base path: `/api/coach`. All responses JSON.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/exams` | List exam metadata (code, name, version, totalQuestionsInOutline). |
-| GET | `/exams/{examCode}/practice-session?count=N` | Get a practice session: N random questions for that exam (no correct answer or explanation in response). Returns `{ questions, totalMinutes }`. |
+| GET | `/exams/{examCode}/pool-size` | Number of active questions in the pool for that exam. |
+| GET | `/exams/{examCode}/practice-session?count=N` | Get a practice session: N questions drawn from the pool **by FINRA topic weight** (no correct answer or explanation in response). Returns `{ questions, totalMinutes }`. If the pool is empty, returns empty questions; UI suggests admin generate questions in Config → Generate Questions and save to pool. |
 | GET | `/exams/{examCode}/check?questionId=&selectedLetter=` | Check a single answer. Returns `{ correct, correctLetter, explanation }`. Does **not** record progress. |
 | POST | `/exams/{examCode}/score` | Score an exam. Body: `{ answers: [{ questionId, selectedLetter }], userId?, save? }`. Returns `{ correct, total, percentage, passed, passingPercentage }`. If `save === true` and `userId` is set, creates a `CoachExamAttempt` and updates `CoachUserProgress`. |
 | GET | `/history?userId=` | All attempt history for the user. |
@@ -101,10 +102,14 @@ Response:
 }
 ```
 
+## FINRA topic distribution
+
+Practice sessions are built so that the **proportion of questions per topic** matches FINRA’s exam outline (e.g. SIE: 16% Knowledge of Capital Markets, 44% Products and Risks, 31% Trading/Customer Accounts, 9% Regulatory Framework). Questions must have a `topic` that matches the exam’s topic list (see `ExamTopicWeights`). Admin-generated questions (Config → Generate Questions with exam selected and “Save to exam pool”) are tagged with a topic and added to the pool; each practice session then selects by topic to meet the target counts.
+
 ## Data model (MongoDB)
 
 - **coachExams** — One document per exam (code, name, version, totalQuestionsInOutline). Seeded on first run.
-- **coachQuestions** — One per question: examCode, question text, choices (letter + text), correctLetter, explanation, optional topic/difficulty/outlineReference/source, active flag.
+- **coachQuestions** — One per question: examCode, question text, choices (letter + text), correctLetter, explanation, **topic** (used for FINRA weight distribution), optional difficulty/outlineReference/source, active flag. Questions with `source = "generated"` come from the admin Generate Questions flow.
 - **coachUserProgress** — Per user per exam: totalAsked, correct, lastSessionAt, weakTopics (topic + missCount). Updated when recording answers or saving a scored attempt.
 - **coachExamAttempts** — Saved attempts: userId, examCode, correct, total, percentage, passed, completedAt, createdAt.
 - **coachSessions** — Optional; used if session state is persisted.

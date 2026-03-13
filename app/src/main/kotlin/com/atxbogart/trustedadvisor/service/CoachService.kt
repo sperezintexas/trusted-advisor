@@ -1,5 +1,6 @@
 package com.atxbogart.trustedadvisor.service
 
+import com.atxbogart.trustedadvisor.config.ExamTopicWeights
 import com.atxbogart.trustedadvisor.model.*
 import com.atxbogart.trustedadvisor.repository.CoachExamAttemptRepository
 import com.atxbogart.trustedadvisor.repository.CoachExamRepository
@@ -21,6 +22,8 @@ class CoachService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun getExams(): List<CoachExam> = examRepository.findAll()
+
+    fun getPoolSize(examCode: ExamCode): Long = questionRepository.countByExamCodeAndActiveTrue(examCode)
 
     fun getRandomQuestion(examCode: ExamCode, excludeQuestionIds: List<String> = emptyList()): CoachQuestion? {
         val pool = questionRepository.findByExamCodeAndActiveTrue(examCode)
@@ -91,11 +94,37 @@ class CoachService(
         ExamCode.SERIES_65 -> 73
     }
 
+    /**
+     * Builds a practice session that follows FINRA topic weight distribution when possible.
+     * Pools questions by topic and selects according to ExamTopicWeights; fills shortfall from any remaining.
+     */
     fun getPracticeExamQuestions(examCode: ExamCode, count: Int): PracticeSessionResponse {
         val pool = questionRepository.findByExamCodeAndActiveTrue(examCode)
             .filter { it.id != null }
-        val questions = if (pool.size <= count) pool else pool.shuffled().take(count)
-        val dtos = questions.map { q ->
+        if (pool.isEmpty()) {
+            return PracticeSessionResponse(questions = emptyList(), totalMinutes = getExamTimeLimitMinutes(examCode))
+        }
+        val byTopic = pool.groupBy { q -> q.topic ?: "Other" }
+        val targetByTopic = ExamTopicWeights.targetCountsByTopic(examCode, count)
+        val selected = mutableSetOf<String>()
+        val result = mutableListOf<CoachQuestion>()
+
+        for ((topic, targetCount) in targetByTopic) {
+            val available = (byTopic[topic] ?: emptyList()).filter { it.id !in selected }
+            val take = minOf(targetCount, available.size)
+            available.shuffled().take(take).forEach { q ->
+                q.id?.let { selected.add(it); result.add(q) }
+            }
+        }
+        var needMore = count - result.size
+        if (needMore > 0) {
+            val remaining = pool.filter { it.id !in selected }.shuffled()
+            remaining.take(needMore).forEach { q ->
+                q.id?.let { selected.add(it); result.add(q) }
+            }
+        }
+        val finalList = result.take(count)
+        val dtos = finalList.map { q ->
             PracticeExamQuestion(
                 id = q.id!!,
                 question = q.question,

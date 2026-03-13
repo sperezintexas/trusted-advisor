@@ -45,6 +45,19 @@ class CoachController(
             ResponseEntity.ok(emptyList())
         }
 
+    @GetMapping("/exams/{examCode}/pool-size")
+    fun getPoolSize(
+        @PathVariable examCode: String
+    ): ResponseEntity<PoolSizeResponse> {
+        val code = parseExamCode(examCode) ?: return ResponseEntity.badRequest().build()
+        return try {
+            val count = coachService.getPoolSize(code)
+            ResponseEntity.ok(PoolSizeResponse(examCode = examCode, count = count))
+        } catch (e: DataAccessException) {
+            ResponseEntity.ok(PoolSizeResponse(examCode = examCode, count = 0))
+        }
+    }
+
     @GetMapping("/questions/{examCode}")
     fun getRandomQuestion(
         @PathVariable examCode: String,
@@ -190,6 +203,7 @@ class CoachController(
     }
 
     data class RecordAnswerResponse(val correct: Boolean)
+    data class PoolSizeResponse(val examCode: String, val count: Long)
 
     private fun currentEmailFromOAuth2(): String? {
         val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null

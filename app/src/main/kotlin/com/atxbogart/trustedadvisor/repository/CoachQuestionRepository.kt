@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository
 @Repository
 interface CoachQuestionRepository : MongoRepository<CoachQuestion, String> {
     fun findByExamCodeAndActiveTrue(examCode: ExamCode): List<CoachQuestion>
+    fun countByExamCodeAndActiveTrue(examCode: ExamCode): Long
 }

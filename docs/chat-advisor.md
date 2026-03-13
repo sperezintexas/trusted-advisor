@@ -1,16 +1,16 @@
 # Smart Chat Advisor
 
-AI chat advisor powered by xAI Grok. Persona-based system prompts; optional tools (web search, Yahoo Finance) per persona. Config (debug, tools, context) is in-memory; chat history in MongoDB.
+AI chat advisor powered by xAI Grok. Persona-based system prompts; optional tools (web search, Yahoo Finance) per persona. Config (debug, tools, context) is in-memory; chat history in MongoDB. **RAG context** from admin-uploaded persona documents is injected into the system prompt when a persona is selected (see [RAG ingestion](rag-ingestion.md)).
 
 ## Overview
 
 - **Page**: `/chat` — Grok chat; select persona, optional xAI usage stats.
-- **Config page**: `/config` — enable debug, **Test xAI connection** (calls `GET /api/chat/config/test`).
+- **Config page**: `/config` — enable debug, **Test xAI connection** (calls `GET /api/chat/config/test`), **RAG Documents** tab for admin ingestion.
 - **API**: `POST /api/chat` — body: `message`, optional `personaId`, `userId`; returns `{ response, usage? }`.
 - **History**: `GET /api/chat/history?userId=` — saved messages (per user).
 - **Config**: `GET/PUT /api/chat/config` — in-memory (debug, tools, context). Not persisted to DB.
 - **Test**: `GET /api/chat/config/test` — checks xAI connectivity; returns `{ success, message }`.
-- **Storage**: Chat history in `chatHistory` collection (per user).
+- **Storage**: Chat history in `chatHistory` collection (per user). Persona RAG: `personaFiles` and `personaFileChunks` (see [RAG ingestion](rag-ingestion.md)).
 
 ## Rate limits (all chat APIs)
 
@@ -117,19 +117,24 @@ Config is in-memory (lost on backend restart). Used by `/config` page and option
 - **Multi-turn context**: When sending a message, the client passes the last 10 messages as `history`. The API prepends this to the user content so Grok has conversation context.
 - **Limit**: History is trimmed to the last 50 messages per user.
 
+## RAG retrieval (persona file context)
+
+When `personaId` is present, the backend loads **indexed** persona file chunks for that persona only (`PersonaFileService.getFileContext(personaId, maxFileContextTokens)`). Only files with status `INDEXED` are used; chunks are concatenated in order and trimmed to the token budget, then appended to the system prompt. Admin upload and indexing is described in [RAG ingestion](rag-ingestion.md).
+
 ## Flow
 
 1. User opens chat → `GET /api/chat/history` loads saved messages
 2. User sends message → `POST /api/chat` with `{ message, history }`
 3. **Rate limit check** for the route (see [Rate limits](#rate-limits-all-chat-apis))
-4. Load `getGrokChatConfig()`
-5. Intent detection → run enabled pre-fetch tools (portfolio, market news, stock prices, covered call recommendations when applicable)
-6. Build system prompt (default or override + risk + goals + tools hint)
-7. Build user content: `{history}\n[Context from tools]\n{context}\n\n[User question]\n{message}` (history = last 10 messages when provided)
-8. Call `callGrokWithTools(systemPrompt, userContent, { tools: webSearch ? [WEB_SEARCH_TOOL] : [] })`
-9. Grok may call `web_search`; executor runs SerpAPI and appends results to messages
-10. Save user message + response to chat history (when user is authenticated)
-11. Return `{ response, toolResults? }`
+4. Load persona (if `personaId`) and **file context** (indexed RAG chunks for that persona)
+5. Load `getGrokChatConfig()`
+6. Intent detection → run enabled pre-fetch tools (portfolio, market news, stock prices, covered call recommendations when applicable)
+7. Build system prompt (default or override + **file context** + risk + goals + tools hint)
+8. Build user content: `{history}\n[Context from tools]\n{context}\n\n[User question]\n{message}` (history = last 10 messages when provided)
+9. Call `callGrokWithTools(systemPrompt, userContent, { tools: webSearch ? [WEB_SEARCH_TOOL] : [] })`
+10. Grok may call `web_search`; executor runs SerpAPI and appends results to messages
+11. Save user message + response to chat history (when user is authenticated)
+12. Return `{ response, toolResults? }`
 
 ## Fallback
 

@@ -169,7 +169,7 @@ export default function CoachExamContent() {
       const data = await res.json()
       const sess = toSession(data)
       if (!sess) {
-        setError('No questions available for this exam.')
+        setError('No questions in the pool for this exam. An admin can generate questions in Config → Generate Questions (select this exam and "Save to exam pool").')
         return
       }
       setSession(sess)
