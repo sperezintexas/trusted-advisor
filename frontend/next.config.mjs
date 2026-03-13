@@ -9,6 +9,10 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env') })
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  env: {
+    NEXT_PUBLIC_APP_VERSION:
+      process.env.npm_package_version || process.env.APP_VERSION || '0.0.0',
+  },
   async rewrites() {
     const backend =
       process.env.NEXT_PUBLIC_BACKEND_URL ||
