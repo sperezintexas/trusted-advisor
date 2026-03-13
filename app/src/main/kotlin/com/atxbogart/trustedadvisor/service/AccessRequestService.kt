@@ -21,7 +21,8 @@ sealed class AccessRequestResult {
 @Service
 class AccessRequestService(
     private val accessRequestRepository: AccessRequestRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val slackNotificationService: SlackNotificationService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -57,6 +58,9 @@ class AccessRequestService(
         )
         val saved = accessRequestRepository.save(request)
         log.info("[access-request] New request submitted: {} (id={})", email, saved.id)
+
+        slackNotificationService.sendAccessRequestNotification(saved)
+
         return AccessRequestResult.Success(saved)
     }
 
@@ -107,6 +111,8 @@ class AccessRequestService(
         val savedUser = userRepository.save(newUser)
         log.info("[access-request] Approved request {} and created user {} (id={})", requestId, request.email, savedUser.id)
 
+        slackNotificationService.sendAccessApprovedNotification(savedRequest, reviewerEmail)
+
         return AccessRequestResult.Success(savedRequest)
     }
 
@@ -130,6 +136,12 @@ class AccessRequestService(
         val saved = accessRequestRepository.save(updatedRequest)
         log.info("[access-request] Rejected request {} for {}", requestId, request.email)
 
+        slackNotificationService.sendAccessRejectedNotification(saved, reviewerEmail)
+
         return AccessRequestResult.Success(saved)
+    }
+
+    fun getPendingRequestCount(): Int {
+        return accessRequestRepository.findByStatus(AccessRequestStatus.PENDING).size
     }
 }
