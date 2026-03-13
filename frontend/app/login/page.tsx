@@ -3,10 +3,33 @@
 import AppHeader from '../components/AppHeader'
 import { isAuthDebugEnabled, authDebugLog, checkSessionStatus } from '@/lib/auth'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
+import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
 export default function LoginPage() {
   const debugOn = isAuthDebugEnabled()
+  const router = useRouter()
+
+  useEffect(() => {
+    // If OAuth session already exists, route user to the right next step.
+    void fetch(apiUrl('/auth/session'), defaultFetchOptions())
+      .then((r) => (r.ok ? r.json() : null))
+      .then((session: { allowed?: boolean; needsRegistration?: boolean } | null) => {
+        if (!session) return
+        if (session.allowed && session.needsRegistration) {
+          router.replace('/register')
+          return
+        }
+        if (session.allowed) {
+          router.replace('/coach')
+          return
+        }
+        router.replace('/request-access')
+      })
+      .catch(() => {
+        // stay on login if session check fails
+      })
+  }, [router])
 
   useEffect(() => {
     if (!debugOn) return

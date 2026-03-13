@@ -217,6 +217,8 @@ export function useAuth(): {
 
   useEffect(() => {
     if (pathname === '/login') {
+      // Ensure login page always starts from a clean auth state.
+      setUser(null)
       setLoading(false)
       return
     }
@@ -224,7 +226,7 @@ export function useAuth(): {
     setLoading(true)
     fetchSession()
       .then((data) => {
-        if (!cancelled && data) setUser(data)
+        if (!cancelled) setUser(data)
       })
       .catch(() => {
         if (!cancelled) setUser(null)
