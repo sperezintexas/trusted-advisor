@@ -31,6 +31,14 @@ data class AddFileRequest(
     val sizeBytes: Long? = null
 )
 
+data class PersonaEvidenceChunk(
+    val fileId: String,
+    val fileName: String,
+    val chunkIndex: Int,
+    val content: String,
+    val tokenCount: Int
+)
+
 @Service
 class PersonaFileService(
     private val personaFileRepository: PersonaFileRepository,
@@ -132,10 +140,11 @@ class PersonaFileService(
             updatedAt = now
         )
         val saved = personaFileRepository.save(file)
-        return when (val indexResult = indexFileContent(saved.id!!, content)) {
+        val savedId = saved.id ?: return PersonaFileResult.Error("Failed to persist uploaded file ID")
+        return when (val indexResult = indexFileContent(savedId, content)) {
             is PersonaFileResult.Success -> indexResult
             is PersonaFileResult.Error -> indexResult
-            else -> PersonaFileResult.Success(personaFileRepository.findById(saved.id!!).orElse(saved))
+            else -> PersonaFileResult.Success(personaFileRepository.findById(savedId).orElse(saved))
         }
     }
 
@@ -180,8 +189,7 @@ class PersonaFileService(
 
     /** Reindex by re-chunking existing stored chunks (no new content). */
     fun reindexFromStoredChunks(fileId: String): PersonaFileResult {
-        val file = personaFileRepository.findById(fileId).orElse(null)
-            ?: return PersonaFileResult.NotFound
+        if (!personaFileRepository.existsById(fileId)) return PersonaFileResult.NotFound
         val chunks = personaFileChunkRepository.findByFileIdOrderByChunkIndexAsc(fileId)
         if (chunks.isEmpty()) {
             return PersonaFileResult.Error("No chunks to reindex; upload content first.")
@@ -272,6 +280,62 @@ class PersonaFileService(
     }
 
     /**
+     * Query-aware retrieval of top-k persona chunks.
+     * Uses lexical scoring with token overlap and phrase bonus.
+     */
+    fun getTopChunksForQuery(
+        personaId: String,
+        query: String,
+        topK: Int = 8,
+        maxTokens: Int = 4000
+    ): List<PersonaEvidenceChunk> {
+        val files = personaFileRepository.findByPersonaIdAndStatus(personaId, FileIndexStatus.INDEXED)
+        if (files.isEmpty()) return emptyList()
+
+        val indexedFileIds = files.mapNotNull { it.id }.toSet()
+        if (indexedFileIds.isEmpty()) return emptyList()
+
+        val fileNameById = files.mapNotNull { file -> file.id?.let { id -> id to file.name } }.toMap()
+        val queryTokens = tokenizeForSearch(query)
+        if (queryTokens.isEmpty()) return emptyList()
+
+        val ranked = personaFileChunkRepository.findByPersonaId(personaId)
+            .asSequence()
+            .filter { it.fileId in indexedFileIds }
+            .map { chunk ->
+                val tokenCount = chunk.tokenCount ?: estimateTokens(chunk.content)
+                val score = scoreChunk(query, queryTokens, chunk.content)
+                Triple(chunk, score, tokenCount)
+            }
+            .filter { (_, score, _) -> score > 0.0 }
+            .sortedWith(
+                compareByDescending<Triple<PersonaFileChunk, Double, Int>> { it.second }
+                    .thenBy { it.first.chunkIndex }
+            )
+            .toList()
+
+        if (ranked.isEmpty()) return emptyList()
+
+        val selected = mutableListOf<PersonaEvidenceChunk>()
+        var usedTokens = 0
+        for ((chunk, _, tokenCount) in ranked) {
+            if (selected.size >= topK) break
+            if (usedTokens + tokenCount > maxTokens) continue
+            selected.add(
+                PersonaEvidenceChunk(
+                    fileId = chunk.fileId,
+                    fileName = fileNameById[chunk.fileId] ?: "Unknown file",
+                    chunkIndex = chunk.chunkIndex,
+                    content = chunk.content,
+                    tokenCount = tokenCount
+                )
+            )
+            usedTokens += tokenCount
+        }
+        return selected
+    }
+
+    /**
      * Splits content into chunks with a character budget and optional overlap.
      * Overlap keeps context across boundaries (deterministic for same input).
      */
@@ -331,5 +395,39 @@ class PersonaFileService(
 
     private fun estimateTokens(text: String): Int {
         return (text.length / 4.0).toInt()
+    }
+
+    private fun scoreChunk(query: String, queryTokens: Set<String>, content: String): Double {
+        val lowered = content.lowercase()
+        val contentTokens = tokenizeForSearch(content)
+        if (contentTokens.isEmpty()) return 0.0
+
+        var overlapHits = 0
+        queryTokens.forEach { token ->
+            if (token in contentTokens) overlapHits++
+        }
+        if (overlapHits == 0) return 0.0
+
+        val phraseBonus = if (lowered.contains(query.lowercase().trim())) 2.0 else 0.0
+        val overlapRatio = overlapHits.toDouble() / queryTokens.size.toDouble()
+        val densityBoost = overlapHits.toDouble() / 3.0
+        return overlapRatio * 4.0 + densityBoost + phraseBonus
+    }
+
+    private fun tokenizeForSearch(text: String): Set<String> {
+        val stopWords = setOf(
+            "the", "and", "for", "that", "with", "this", "from", "are", "you", "your",
+            "have", "has", "was", "were", "what", "when", "where", "why", "how", "can",
+            "could", "would", "should", "about", "into", "than", "then", "them", "they",
+            "their", "there", "here", "also", "any", "all", "use", "using", "used"
+        )
+        return text.lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.length >= 3 }
+            .filter { it !in stopWords }
+            .take(128)
+            .toSet()
     }
 }
