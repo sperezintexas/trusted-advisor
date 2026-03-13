@@ -23,21 +23,22 @@ The workflow [../.github/workflows/deploy-aws-apprunner.yml](../.github/workflow
 
 ### Secrets (Settings → Secrets and variables → Actions → Secrets)
 
-| Secret | Description |
-|--------|-------------|
-| `AWS_ACCESS_KEY_ID` | IAM user access key (ECR + App Runner permissions). |
-| `AWS_SECRET_ACCESS_KEY` | IAM user secret key. |
+|Secret|Description|
+|------|-----------|
+|`AWS_ACCESS_KEY_ID`|IAM user access key (ECR + App Runner permissions).|
+|`AWS_SECRET_ACCESS_KEY`|IAM user secret key.|
 
 ### Variables (Settings → Secrets and variables → Actions → Variables)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENABLE_AWS_DEPLOY` | — | Set to `true` to run deploy steps. Omit or `false` = build & push only. |
-| `AWS_REGION` | `us-east-1` | Region for ECR and App Runner. |
-| `ECR_REPOSITORY_BACKEND` | `trusted-advisor-backend` | ECR repository name for backend image. |
-| `ECR_REPOSITORY_FRONTEND` | `trusted-advisor-frontend` | ECR repository name for frontend image. |
-| `APP_RUNNER_SERVICE_ARN_BACKEND` | — | App Runner service ARN for backend (port 8080). If set and deploy enabled, triggers deployment after push. |
-| `APP_RUNNER_SERVICE_ARN_FRONTEND` | — | App Runner service ARN for frontend (port 3000). If set and deploy enabled, triggers deployment after push. |
+|Variable|Default|Description|
+|--------|-------|-----------|
+|`ENABLE_AWS_DEPLOY`|—|Set to `true` to run deploy steps. Omit or `false` = build & push only.|
+|`AWS_REGION`|`us-east-1`|Region for ECR and App Runner.|
+|`BACKEND_URL`|—|**Required** for frontend Docker build. Used as `BACKEND_URL` and `NEXT_PUBLIC_BACKEND_URL` during `next build`.|
+|`ECR_REPOSITORY_BACKEND`|`trusted-advisor-backend`|ECR repository name for backend image.|
+|`ECR_REPOSITORY_FRONTEND`|`trusted-advisor-frontend`|ECR repository name for frontend image.|
+|`APP_RUNNER_SERVICE_ARN_BACKEND`|—|App Runner service ARN for backend (port 8080). If set and deploy enabled, triggers deployment after push.|
+|`APP_RUNNER_SERVICE_ARN_FRONTEND`|—|App Runner service ARN for frontend (port 3000). If set and deploy enabled, triggers deployment after push.|
 
 ## One-time AWS setup
 

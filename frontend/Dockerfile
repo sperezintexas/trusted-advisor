@@ -6,6 +6,10 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci
 COPY . .
+ARG NEXT_PUBLIC_BACKEND_URL
+ARG BACKEND_URL
+ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+ENV BACKEND_URL=${BACKEND_URL}
 RUN npm run build
 
 # Run stage (standalone output)
