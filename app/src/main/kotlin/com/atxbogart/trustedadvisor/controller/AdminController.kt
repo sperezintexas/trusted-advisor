@@ -23,6 +23,8 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @RestController
 @RequestMapping("/api/admin")
@@ -65,7 +67,7 @@ class AdminController(
 
     private fun currentEmailFromOAuth2(): String? {
         val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
-        val principal = auth.principal as? OAuth2User ?: return null
+        val principal = auth.principal
         val attrs = principal.attributes
         return (attrs["email"] as? String)
             ?: (attrs["login"] as? String)?.let { "$it@github.local" }
@@ -221,6 +223,111 @@ class AdminController(
         )
     }
 
+    @PostMapping("/users")
+    fun createUser(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @RequestBody body: CreateUserRequestBody
+    ): ResponseEntity<AdminUserResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+
+        val normalizedEmail = body.email.trim().lowercase()
+        if (normalizedEmail.isBlank() || !normalizedEmail.contains("@")) {
+            return ResponseEntity.badRequest().body(
+                AdminUserResponse(success = false, message = "Valid email is required", user = null)
+            )
+        }
+        if (userRepository.findByEmail(normalizedEmail) != null) {
+            return ResponseEntity.badRequest().body(
+                AdminUserResponse(success = false, message = "A user with this email already exists", user = null)
+            )
+        }
+
+        val username = body.username?.trim()?.takeIf { it.isNotBlank() } ?: normalizedEmail.substringBefore("@")
+        if (userRepository.findByUsername(username) != null) {
+            return ResponseEntity.badRequest().body(
+                AdminUserResponse(success = false, message = "A user with this username already exists", user = null)
+            )
+        }
+
+        val role = body.role?.trim()?.uppercase()?.let {
+            runCatching { UserRole.valueOf(it) }.getOrNull()
+        } ?: UserRole.BASIC
+        val displayName = body.displayName?.trim()?.takeIf { it.isNotBlank() }
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+
+        val created = userRepository.save(
+            User(
+                email = normalizedEmail,
+                username = username,
+                displayName = displayName,
+                role = role,
+                registered = body.registered ?: false,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+
+        return ResponseEntity.ok(
+            AdminUserResponse(success = true, message = "User added successfully", user = created.toView())
+        )
+    }
+
+    @PutMapping("/users/{id}")
+    fun updateUser(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable id: String,
+        @RequestBody body: UpdateUserRequestBody
+    ): ResponseEntity<AdminUserResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+
+        val existing = userRepository.findById(id).orElse(null)
+            ?: return ResponseEntity.notFound().build()
+
+        val nextEmail = body.email?.trim()?.lowercase()?.takeIf { it.isNotBlank() } ?: (existing.email ?: "")
+        if (nextEmail.isBlank() || !nextEmail.contains("@")) {
+            return ResponseEntity.badRequest().body(
+                AdminUserResponse(success = false, message = "Valid email is required", user = null)
+            )
+        }
+        val byEmail = userRepository.findByEmail(nextEmail)
+        if (byEmail != null && byEmail.id != existing.id) {
+            return ResponseEntity.badRequest().body(
+                AdminUserResponse(success = false, message = "A user with this email already exists", user = null)
+            )
+        }
+
+        val nextUsername = body.username?.trim()?.takeIf { it.isNotBlank() } ?: existing.username
+        val byUsername = userRepository.findByUsername(nextUsername)
+        if (byUsername != null && byUsername.id != existing.id) {
+            return ResponseEntity.badRequest().body(
+                AdminUserResponse(success = false, message = "A user with this username already exists", user = null)
+            )
+        }
+
+        val nextRole = body.role?.trim()?.uppercase()?.let {
+            runCatching { UserRole.valueOf(it) }.getOrNull()
+        } ?: existing.role
+        val nextDisplayName = body.displayName?.trim()?.takeIf { it.isNotBlank() }
+        val updated = existing.copy(
+            email = nextEmail,
+            username = nextUsername,
+            displayName = nextDisplayName,
+            role = nextRole,
+            registered = body.registered ?: existing.registered,
+            updatedAt = LocalDateTime.now(ZoneOffset.UTC)
+        )
+        val saved = userRepository.save(updated)
+        return ResponseEntity.ok(
+            AdminUserResponse(success = true, message = "User updated successfully", user = saved.toView())
+        )
+    }
+
     @DeleteMapping("/users/{id}")
     fun deleteUser(
         @AuthenticationPrincipal principal: ApiKeyPrincipal?,
@@ -312,9 +419,17 @@ class AdminController(
             personaFileService.reindexFromStoredChunks(docId)
         }
         return when (result) {
-            is PersonaFileResult.Success -> ResponseEntity.ok(
-                AdminDocumentResponse(success = true, message = "Document reindexed", document = result.file.toAdminDocumentView())
-            )
+            is PersonaFileResult.Success -> {
+                if (result.file.personaId != personaId) {
+                    ResponseEntity.badRequest().body(
+                        AdminDocumentResponse(success = false, message = "Document does not belong to persona", document = null)
+                    )
+                } else {
+                    ResponseEntity.ok(
+                        AdminDocumentResponse(success = true, message = "Document reindexed", document = result.file.toAdminDocumentView())
+                    )
+                }
+            }
             is PersonaFileResult.NotFound -> ResponseEntity.notFound().build()
             is PersonaFileResult.Error -> ResponseEntity.badRequest().body(
                 AdminDocumentResponse(success = false, message = result.message, document = null)
@@ -334,9 +449,17 @@ class AdminController(
             return ResponseEntity.status(403).build()
         }
         return when (val result = personaFileService.removeFile(docId, email)) {
-            is PersonaFileResult.Success -> ResponseEntity.ok(
-                AdminDocumentResponse(success = true, message = "Document deleted", document = result.file.toAdminDocumentView())
-            )
+            is PersonaFileResult.Success -> {
+                if (result.file.personaId != personaId) {
+                    ResponseEntity.badRequest().body(
+                        AdminDocumentResponse(success = false, message = "Document does not belong to persona", document = null)
+                    )
+                } else {
+                    ResponseEntity.ok(
+                        AdminDocumentResponse(success = true, message = "Document deleted", document = result.file.toAdminDocumentView())
+                    )
+                }
+            }
             is PersonaFileResult.NotFound -> ResponseEntity.notFound().build()
             else -> ResponseEntity.badRequest().build()
         }
@@ -407,6 +530,7 @@ class AdminController(
         email = email ?: "",
         username = username,
         displayName = displayName,
+    role = role.name,
         registered = registered,
         createdAt = createdAt.toString(),
         lastLoginAt = lastLoginAt?.toString()
@@ -447,6 +571,7 @@ data class UserView(
     val email: String,
     val username: String,
     val displayName: String?,
+    val role: String,
     val registered: Boolean,
     val createdAt: String,
     val lastLoginAt: String?
@@ -455,6 +580,28 @@ data class UserView(
 data class UserListResponse(
     val users: List<UserView>,
     val total: Int
+)
+
+data class CreateUserRequestBody(
+    val email: String,
+    val username: String? = null,
+    val displayName: String? = null,
+    val role: String? = null,
+    val registered: Boolean? = null
+)
+
+data class UpdateUserRequestBody(
+    val email: String? = null,
+    val username: String? = null,
+    val displayName: String? = null,
+    val role: String? = null,
+    val registered: Boolean? = null
+)
+
+data class AdminUserResponse(
+    val success: Boolean,
+    val message: String,
+    val user: UserView?
 )
 
 data class AdminDocumentView(

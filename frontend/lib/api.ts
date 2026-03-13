@@ -17,6 +17,9 @@ export function getBackendUrl(): string {
  * Base URL for API calls.
  */
 export function getApiBaseUrl(): string {
+  // In the browser, always use same-origin /api and rely on Next rewrites.
+  // This avoids cross-origin preflight/CORS issues in deployed environments.
+  if (typeof window !== 'undefined') return '/api'
   return `${BACKEND_ORIGIN}/api`
 }
 

@@ -11,6 +11,8 @@ import {
   approveAccessRequest,
   rejectAccessRequest,
   fetchUsers,
+  createUser,
+  updateUser,
   deleteUser,
   fetchPersonaDocuments,
   uploadPersonaDocument,
@@ -44,6 +46,14 @@ type AuthDebug = {
 type ConfigTab = 'system' | 'access-requests' | 'users' | 'rag-documents' | 'generate-questions'
 
 type Persona = { id: string; name: string; description?: string }
+type UserFormState = {
+  id: string | null
+  email: string
+  username: string
+  displayName: string
+  role: 'ADMIN' | 'BASIC' | 'PREMIUM'
+  registered: boolean
+}
 
 export default function ConfigPage() {
   const { user } = useAuth()
@@ -63,7 +73,16 @@ export default function ConfigPage() {
   const [users, setUsers] = useState<UserView[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState<string | null>(null)
+  const [savingUser, setSavingUser] = useState(false)
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
+  const [userForm, setUserForm] = useState<UserFormState>({
+    id: null,
+    email: '',
+    username: '',
+    displayName: '',
+    role: 'BASIC',
+    registered: false,
+  })
   const [personas, setPersonas] = useState<Persona[]>([])
   const [personasLoading, setPersonasLoading] = useState(true)
   const [ragPersonaId, setRagPersonaId] = useState<string>('')
@@ -225,6 +244,63 @@ export default function ConfigPage() {
     },
     [loadUsers]
   )
+
+  const resetUserForm = useCallback(() => {
+    setUserForm({
+      id: null,
+      email: '',
+      username: '',
+      displayName: '',
+      role: 'BASIC',
+      registered: false,
+    })
+  }, [])
+
+  const handleEditUser = useCallback((u: UserView) => {
+    setUsersError(null)
+    setUserForm({
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      displayName: u.displayName ?? '',
+      role: (u.role === 'ADMIN' || u.role === 'PREMIUM' ? u.role : 'BASIC'),
+      registered: u.registered,
+    })
+  }, [])
+
+  const handleSaveUser = useCallback(async () => {
+    const email = userForm.email.trim().toLowerCase()
+    if (!email || !email.includes('@')) {
+      setUsersError('Valid email is required.')
+      return
+    }
+
+    setSavingUser(true)
+    setUsersError(null)
+    const payload = {
+      email,
+      username: userForm.username.trim() || undefined,
+      displayName: userForm.displayName.trim() || undefined,
+      role: userForm.role,
+      registered: userForm.registered,
+    } as const
+
+    const result = userForm.id
+      ? await updateUser(userForm.id, payload)
+      : await createUser(payload)
+
+    setSavingUser(false)
+    if (!result) {
+      setUsersError(userForm.id ? 'Failed to update user.' : 'Failed to add user.')
+      return
+    }
+    if (!result.success) {
+      setUsersError(result.message)
+      return
+    }
+    resetUserForm()
+    await loadUsers()
+  }, [userForm, loadUsers, resetUserForm])
 
   const loadPersonas = useCallback(async () => {
     setPersonasLoading(true)
@@ -815,7 +891,96 @@ export default function ConfigPage() {
                 </button>
               </div>
               <div className="docs-path mb-3 inline-block">
-                GET /api/admin/users · DELETE /api/admin/users/:id
+                GET /api/admin/users · POST /api/admin/users · PUT /api/admin/users/:id · DELETE /api/admin/users/:id
+              </div>
+              <div className="mb-4 rounded-lg border border-[var(--docs-border)] bg-white p-4">
+                <h3 className="mb-3 text-sm font-medium text-[var(--docs-text)]">
+                  {userForm.id ? 'Edit user' : 'Add user'}
+                </h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="text-sm text-[var(--docs-text)]">
+                    Email
+                    <input
+                      type="email"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[var(--docs-border)] px-3 py-2 text-sm"
+                      placeholder="user@example.com"
+                    />
+                  </label>
+                  <label className="text-sm text-[var(--docs-text)]">
+                    Username
+                    <input
+                      type="text"
+                      value={userForm.username}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, username: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[var(--docs-border)] px-3 py-2 text-sm"
+                      placeholder="optional (auto from email)"
+                    />
+                  </label>
+                  <label className="text-sm text-[var(--docs-text)]">
+                    Display name
+                    <input
+                      type="text"
+                      value={userForm.displayName}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, displayName: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[var(--docs-border)] px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <label className="text-sm text-[var(--docs-text)]">
+                    Role
+                    <select
+                      value={userForm.role}
+                      onChange={(e) =>
+                        setUserForm((prev) => ({
+                          ...prev,
+                          role: e.target.value as 'ADMIN' | 'BASIC' | 'PREMIUM',
+                        }))
+                      }
+                      className="mt-1 w-full rounded border border-[var(--docs-border)] px-3 py-2 text-sm"
+                    >
+                      <option value="BASIC">BASIC</option>
+                      <option value="PREMIUM">PREMIUM</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-[var(--docs-text)] md:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={userForm.registered}
+                      onChange={(e) =>
+                        setUserForm((prev) => ({ ...prev, registered: e.target.checked }))
+                      }
+                      className="h-4 w-4 rounded border-[var(--docs-border)]"
+                    />
+                    Mark as fully registered
+                  </label>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveUser()}
+                    disabled={savingUser}
+                    className="rounded-lg bg-[var(--docs-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {savingUser
+                      ? userForm.id
+                        ? 'Saving…'
+                        : 'Adding…'
+                      : userForm.id
+                        ? 'Save changes'
+                        : 'Add user'}
+                  </button>
+                  {userForm.id && (
+                    <button
+                      type="button"
+                      onClick={resetUserForm}
+                      className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)]"
+                    >
+                      Cancel edit
+                    </button>
+                  )}
+                </div>
               </div>
               {usersError && (
                 <p className="mb-2 text-sm text-red-600" role="alert">
@@ -832,6 +997,7 @@ export default function ConfigPage() {
                     <thead className="bg-[var(--docs-code-bg)]">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">User</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Role</th>
                         <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Registered</th>
                         <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Last login</th>
                         <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Actions</th>
@@ -847,13 +1013,23 @@ export default function ConfigPage() {
                             <p className="text-xs text-[var(--docs-muted)]">{u.email}</p>
                           </td>
                           <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
-                            {formatDate(u.createdAt)}
+                            {u.role}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
+                            {u.registered ? 'Yes' : 'No'}
                           </td>
                           <td className="px-4 py-3 text-sm text-[var(--docs-muted)]">
                             {u.lastLoginAt ? formatDate(u.lastLoginAt) : '—'}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center justify-end">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditUser(u)}
+                                className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--docs-text)] hover:bg-[var(--docs-code-bg)]"
+                              >
+                                Edit
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => void handleDeleteUser(u.id, u.email)}

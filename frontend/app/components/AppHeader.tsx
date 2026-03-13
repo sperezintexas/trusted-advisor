@@ -3,7 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { useAuth, logout, fetchAuthSession, type UserRole } from '@/lib/auth'
+import {
+  useAuth,
+  logout,
+  fetchAuthSession,
+  createSubscriptionCheckout,
+  type UserRole,
+} from '@/lib/auth'
 
 type NavItem = {
   href: string
@@ -21,16 +27,49 @@ export default function AppHeader() {
   const pathname = usePathname()
   const { user } = useAuth()
   const [role, setRole] = useState<UserRole | null>(null)
+  const [authProfile, setAuthProfile] = useState<{
+    username: string
+    displayName: string | null
+  } | null>(null)
+  const [upgradeLoading, setUpgradeLoading] = useState(false)
+  const [upgradeError, setUpgradeError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAuthSession().then((session) => {
       if (session?.user?.role) {
         setRole(session.user.role)
+        setAuthProfile({
+          username: session.user.username,
+          displayName: session.user.displayName,
+        })
       } else {
         setRole(null)
+        setAuthProfile(null)
       }
     })
   }, [pathname, user?.id])
+
+  async function handleUpgradeToPremium() {
+    if (!authProfile || upgradeLoading) return
+    setUpgradeLoading(true)
+    setUpgradeError(null)
+    try {
+      const checkout = await createSubscriptionCheckout({
+        tier: 'PREMIUM',
+        username: authProfile.username,
+        displayName: authProfile.displayName ?? authProfile.username,
+      })
+      if (!checkout?.success || !checkout.checkoutUrl) {
+        setUpgradeError(checkout?.message ?? 'Could not start checkout.')
+        return
+      }
+      window.location.href = checkout.checkoutUrl
+    } catch {
+      setUpgradeError('Could not start checkout.')
+    } finally {
+      setUpgradeLoading(false)
+    }
+  }
 
   const navItemClass = (isActive: boolean) =>
     [
@@ -82,6 +121,16 @@ export default function AppHeader() {
               <span className="ml-1.5 hidden sm:inline">Config</span>
             </Link>
           )}
+          {user && role === 'BASIC' && (
+            <button
+              type="button"
+              onClick={() => void handleUpgradeToPremium()}
+              disabled={upgradeLoading}
+              className="rounded-md bg-[var(--docs-accent)] px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {upgradeLoading ? 'Starting…' : 'Upgrade to Premium'}
+            </button>
+          )}
           {user && (
             <span className="flex items-center gap-2 border-l border-[var(--docs-border)] pl-4">
               {user.profileImageUrl ? (
@@ -107,6 +156,11 @@ export default function AppHeader() {
           )}
         </nav>
       </div>
+      {upgradeError && (
+        <div className="mx-auto max-w-4xl px-4 pb-2">
+          <p className="text-xs text-red-600">{upgradeError}</p>
+        </div>
+      )}
     </header>
   )
 }

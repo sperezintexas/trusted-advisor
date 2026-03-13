@@ -30,6 +30,7 @@ export type UserView = {
   email: string
   username: string
   displayName: string | null
+  role: 'ADMIN' | 'BASIC' | 'PREMIUM' | string
   registered: boolean
   createdAt: string
   lastLoginAt: string | null
@@ -38,6 +39,28 @@ export type UserView = {
 export type UserListResponse = {
   users: UserView[]
   total: number
+}
+
+export type AdminUserResponse = {
+  success: boolean
+  message: string
+  user: UserView | null
+}
+
+export type CreateUserInput = {
+  email: string
+  username?: string
+  displayName?: string
+  role?: 'ADMIN' | 'BASIC' | 'PREMIUM'
+  registered?: boolean
+}
+
+export type UpdateUserInput = {
+  email?: string
+  username?: string
+  displayName?: string
+  role?: 'ADMIN' | 'BASIC' | 'PREMIUM'
+  registered?: boolean
 }
 
 export async function fetchAccessRequests(
@@ -120,6 +143,37 @@ export async function deleteUser(id: string): Promise<AdminActionResponse | null
     })
     if (!res.ok) return null
     return (await res.json()) as AdminActionResponse
+  } catch {
+    return null
+  }
+}
+
+export async function createUser(input: CreateUserInput): Promise<AdminUserResponse | null> {
+  try {
+    const res = await fetch(apiUrl('/admin/users'), {
+      ...defaultFetchOptions(),
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) return null
+    return (await res.json()) as AdminUserResponse
+  } catch {
+    return null
+  }
+}
+
+export async function updateUser(
+  id: string,
+  input: UpdateUserInput
+): Promise<AdminUserResponse | null> {
+  try {
+    const res = await fetch(apiUrl(`/admin/users/${id}`), {
+      ...defaultFetchOptions(),
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) return null
+    return (await res.json()) as AdminUserResponse
   } catch {
     return null
   }
