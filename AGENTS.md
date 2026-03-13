@@ -93,3 +93,35 @@ Note: frontend `npm test` is currently a placeholder command that returns succes
 4. Push current branch to origin.
 
 If behavior changes, include a short note in commit message scope or PR summary about affected endpoints.
+
+## Cursor Cloud specific instructions
+
+### Environment prerequisites
+
+- **Java 21**, **Node 22+**, and **MongoDB 7.0** are pre-installed on the VM.
+- The update script runs `npm install --legacy-peer-deps` (frontend) and `./gradlew build --no-daemon -x test` (backend) on each startup.
+
+### `.env` setup (one-time per VM snapshot)
+
+Copy `.env.example` to `.env` and populate:
+
+- `AUTH_SECRET` — generate with `openssl rand -hex 32`.
+- `MONGODB_URI=mongodb://localhost:27017/trusted-advisor` — local MongoDB.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — set to any non-empty dummy value (e.g. `dummy`). Spring Security OAuth2 auto-config fails at startup if these are empty, even though OAuth login is optional. This is the most common startup gotcha.
+- `XAI_API_KEY` — required only for chat (Grok LLM) functionality. Without it the backend starts fine but `/api/chat` will return errors.
+
+### Starting services
+
+1. **MongoDB:** `sudo mongod --dbpath /data/db --fork --logpath /var/log/mongodb/mongod.log`
+2. **Backend (repo root):** `./gradlew bootRun --no-daemon` (port 8080)
+3. **Frontend (`frontend/`):** `npm run dev` (port 3000, proxies `/api/*` to backend)
+
+### Validation (see §4 above)
+
+Standard lint/typecheck/test commands are documented in section 4. No backend unit tests currently exist (`./gradlew test` is a no-op). Frontend `npm test` is a placeholder.
+
+### Gotchas
+
+- The `.env` file lives at the **repo root** and is shared by both services. The backend's `bootRun` task sets `workingDir` to the repo root so spring-dotenv picks it up; Next.js loads `../.env` via `next.config.mjs`.
+- Frontend must be installed with `--legacy-peer-deps` due to peer dependency conflicts.
+- There is no `package-lock.json` committed for the frontend; CI uses `npm ci` with a cache path that expects one, but local dev uses `npm install`.
