@@ -9,6 +9,8 @@ Used by the Kotlin backend (Spring Data MongoDB). No validators are applied by d
 | **users** | App users (username, xId, displayName, profileImageUrl). Seeded with `atxbogart`; link by logging in with X. |
 | **accessRequests** | User access requests (email, displayName, reason, status, oauthProvider, reviewedBy, reviewNote). |
 | **personas** | Custom chat personas (name, systemPrompt, webSearchEnabled, yahooFinanceEnabled). |
+| **personaFiles** | Files attached to personas for context (personaId, sourceType, name, status, chunkCount). |
+| **personaFileChunks** | Indexed content chunks from persona files (fileId, personaId, chunkIndex, content). |
 | **chatHistory** | Per-user chat messages (`userId`, `messages`, `updatedAt`). |
 | **coachExams** | Exam metadata (code, name, version, totalQuestionsInOutline). |
 | **coachQuestions** | Multiple-choice questions (`examCode`, question, choices, correctLetter, explanation, topic, difficulty, active). |

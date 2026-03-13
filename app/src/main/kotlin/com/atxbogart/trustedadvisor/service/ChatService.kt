@@ -2,6 +2,7 @@ package com.atxbogart.trustedadvisor.service
 
 import com.atxbogart.trustedadvisor.model.*
 import com.atxbogart.trustedadvisor.repository.ChatHistoryRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -9,9 +10,15 @@ import java.time.ZoneOffset
 @Service
 class ChatService(
     private val personaService: PersonaService,
+    private val personaFileService: PersonaFileService,
     private val chatHistoryRepository: ChatHistoryRepository,
     private val grokService: GrokService
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    companion object {
+        const val MAX_FILE_CONTEXT_TOKENS = 8000
+    }
 
     fun sendMessage(request: ChatRequest): ChatResponse {
         val history = chatHistoryRepository.findByUserId(request.userId)?.messages ?: mutableListOf()
@@ -20,11 +27,20 @@ class ChatService(
         val basePrompt = persona?.systemPrompt
             ?: "You are a helpful trusted advisor. Use provided context."
 
+        val fileContext = request.personaId?.let {
+            personaFileService.getFileContext(it, MAX_FILE_CONTEXT_TOKENS)
+        } ?: ""
+
         val toolsSuffix = buildToolsAwarenessSuffix(
             webSearchEnabled = persona?.webSearchEnabled ?: true,
             yahooFinanceEnabled = persona?.yahooFinanceEnabled ?: true
         )
-        val systemPrompt = if (toolsSuffix.isBlank()) basePrompt else "$basePrompt\n\n$toolsSuffix"
+
+        val systemPrompt = buildSystemPrompt(basePrompt, fileContext, toolsSuffix)
+
+        if (fileContext.isNotEmpty()) {
+            log.debug("[chat] Including {} chars of file context for persona {}", fileContext.length, request.personaId)
+        }
 
         val messages = listOf(ChatMessage("system", systemPrompt)) +
                 history.takeLast(10) +
@@ -46,6 +62,26 @@ class ChatService(
 
     fun getHistory(userId: String): List<ChatMessage> =
         chatHistoryRepository.findByUserId(userId)?.messages ?: emptyList()
+
+    private fun buildSystemPrompt(basePrompt: String, fileContext: String, toolsSuffix: String): String {
+        val parts = mutableListOf(basePrompt)
+
+        if (fileContext.isNotEmpty()) {
+            parts.add("""
+                |
+                |## Reference Documents
+                |The following documents have been attached to provide context. Use this information to answer questions accurately:
+                |
+                |$fileContext
+            """.trimMargin())
+        }
+
+        if (toolsSuffix.isNotBlank()) {
+            parts.add(toolsSuffix)
+        }
+
+        return parts.joinToString("\n\n")
+    }
 
     private fun buildToolsAwarenessSuffix(
         webSearchEnabled: Boolean,

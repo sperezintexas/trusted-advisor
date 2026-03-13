@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import AppHeader from '../components/AppHeader'
 import AdminGuard from '../components/AdminGuard'
+import PersonaFiles from '../components/PersonaFiles'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 type Persona = {
@@ -343,6 +344,15 @@ export default function PersonasPage() {
                 )}
               </div>
             </form>
+
+            {editingId && (
+              <div className="mt-6 pt-6 border-t border-[var(--docs-border)]">
+                <PersonaFiles
+                  personaId={editingId}
+                  personaName={form.name || 'Persona'}
+                />
+              </div>
+            )}
           </section>
 
           <section className="rounded-xl border border-[var(--docs-border)] bg-white p-5 shadow-sm">
