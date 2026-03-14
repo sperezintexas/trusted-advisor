@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository
 
 @Repository
 interface PersonaRepository : MongoRepository<Persona, String> {
+    fun findByNameIgnoreCase(name: String): Persona?
 }

@@ -22,7 +22,9 @@ class CoachLearningPlanService(
         passingPercentage: Int,
         missedTopics: List<String>
     ): LearningPlanRecommendation {
-        val defaultCoachPersonaId = personaService.findDefaultCoachPersona()?.id ?: "finance-coach"
+        val defaultCoachPersonaId = personaService.findCoachPersonaForExam(examCode)?.id
+            ?: personaService.findDefaultCoachPersona()?.id
+            ?: "finance-coach"
         val prompt = """
             Student just completed a ${examCode.name} practice exam.
             Result: $correct / $total correct (${String.format("%.1f", percentage)}%).
@@ -109,8 +111,14 @@ class CoachLearningPlanService(
     ): LearningPlanRecommendation {
         val topTopics = missedTopics.take(5).ifEmpty { listOf("Core concepts review", "Question strategy") }
         val gap = (passingPercentage - percentage).coerceAtLeast(0.0)
+        val passed = percentage >= passingPercentage
+        val summary = if (passed) {
+            "You are above the passing mark for ${examCode.name}. Keep momentum by reinforcing weak topics and maintaining timed mixed sets to preserve pace and confidence."
+        } else {
+            "You are ${String.format("%.1f", gap)} points below the passing mark for ${examCode.name}. Focus on weak-topic remediation first, then timed mixed sets to rebuild exam pace and confidence."
+        }
         return LearningPlanRecommendation(
-            summary = "You are ${String.format("%.1f", gap)} points below the passing mark for ${examCode.name}. Focus on weak-topic remediation first, then timed mixed sets to rebuild exam pace and confidence.",
+            summary = summary,
             suggestedTopics = topTopics,
             proposedLearningPlan = listOf(
                 "Review notes and explanations for the top missed topics today.",

@@ -35,6 +35,7 @@ data class PersonaFile(
     val sizeBytes: Long? = null,
     val status: FileIndexStatus = FileIndexStatus.PENDING,
     val lastError: String? = null,
+    val pendingContent: String? = null,
     val checksum: String? = null,
     val chunkCount: Int = 0,
     val createdBy: String,

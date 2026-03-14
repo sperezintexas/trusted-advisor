@@ -46,7 +46,10 @@ spring:
               - offline.access
         provider:
           x:
-            issuer-uri: https://twitter.com/i/oauth2
+            authorization-uri: https://twitter.com/i/oauth2/authorize
+            token-uri: https://api.twitter.com/2/oauth2/token
+            user-info-uri: https://api.twitter.com/2/users/me
+            user-name-attribute: data
 
 management:
   endpoints:

@@ -36,8 +36,15 @@ class ChatService(
         val isCoachRequest = shouldUseDefaultCoachPersona(request.message)
 
         val requestedPersona = request.personaId?.let { personaService.findById(it) }
+        val inferredExamCode = if (requestedPersona == null && isCoachRequest) {
+            personaService.detectExamCodeFromMessage(request.message)
+        } else {
+            null
+        }
+
         val defaultCoachPersona = if (requestedPersona == null && isCoachRequest) {
-            personaService.findDefaultCoachPersona()
+            inferredExamCode?.let { personaService.findCoachPersonaForExam(it) }
+                ?: personaService.findDefaultCoachPersona()
         } else {
             null
         }

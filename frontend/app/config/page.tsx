@@ -17,6 +17,7 @@ import {
   fetchPersonaDocuments,
   uploadPersonaDocument,
   reindexPersonaDocument,
+  reindexAllPersonaDocuments,
   deletePersonaDocument,
   generatePersonaQuestions,
   fetchCoachGenerationConfigs,
@@ -106,6 +107,7 @@ export default function ConfigPage() {
   const [ragError, setRagError] = useState<string | null>(null)
   const [ragUploading, setRagUploading] = useState(false)
   const [ragActionDocId, setRagActionDocId] = useState<string | null>(null)
+  const [ragReindexAllLoading, setRagReindexAllLoading] = useState(false)
   const [genQuestionsPersonaId, setGenQuestionsPersonaId] = useState<string>('')
   const [genQuestionsCount, setGenQuestionsCount] = useState(10)
   const [genQuestionsExamCode, setGenQuestionsExamCode] = useState<string>('')
@@ -423,6 +425,23 @@ export default function ConfigPage() {
     },
     [ragPersonaId, loadRagDocuments]
   )
+
+  const handleRagReindexAll = useCallback(async () => {
+    if (!ragPersonaId) return
+    setRagReindexAllLoading(true)
+    setRagError(null)
+    const result = await reindexAllPersonaDocuments(ragPersonaId)
+    setRagReindexAllLoading(false)
+    if (!result) {
+      setRagError('Failed to queue persona reindex job.')
+      return
+    }
+    if (!result.success) {
+      setRagError(result.message)
+      return
+    }
+    await loadRagDocuments()
+  }, [ragPersonaId, loadRagDocuments])
 
   const handleRagDelete = useCallback(
     async (docId: string) => {
@@ -967,7 +986,7 @@ export default function ConfigPage() {
                   Async Jobs
                 </h2>
                 <p className="text-sm text-[var(--docs-muted)]">
-                  Monitor and manage long-running background jobs for recommendation generation and exam question pool generation.
+                  Monitor and manage long-running background jobs for recommendation generation, persona ingestion, and exam question pool generation.
                 </p>
               </div>
               <div className="docs-path mb-3 inline-block">
@@ -1000,7 +1019,7 @@ export default function ConfigPage() {
                 </button>
               </div>
 
-              <div className="mb-6 grid gap-3 md:grid-cols-4">
+              <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-7">
                 <div className="rounded-lg border border-[var(--docs-border)] bg-white p-3">
                   <p className="text-xs text-[var(--docs-muted)]">Recommendation queued</p>
                   <p className="text-lg font-semibold text-[var(--docs-text)]">
@@ -1023,6 +1042,24 @@ export default function ConfigPage() {
                   <p className="text-xs text-[var(--docs-muted)]">Recommendation ready</p>
                   <p className="text-lg font-semibold text-green-700">
                     {jobsOverview?.recommendationQueue.ready ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-[var(--docs-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--docs-muted)]">Persona ingestion queued</p>
+                  <p className="text-lg font-semibold text-[var(--docs-text)]">
+                    {jobsOverview?.personaIngestion.queued ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-[var(--docs-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--docs-muted)]">Persona ingestion indexing</p>
+                  <p className="text-lg font-semibold text-[var(--docs-text)]">
+                    {jobsOverview?.personaIngestion.indexing ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-[var(--docs-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--docs-muted)]">Persona ingestion failed</p>
+                  <p className="text-lg font-semibold text-red-700">
+                    {jobsOverview?.personaIngestion.failed ?? 0}
                   </p>
                 </div>
               </div>
@@ -1117,6 +1154,45 @@ export default function ConfigPage() {
                             <td className="px-3 py-3 text-xs text-[var(--docs-muted)]">
                               {cache.generatedAt ? formatDate(cache.generatedAt) : '—'}
                             </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              <div className="mb-8">
+                <h3 className="mb-2 text-base font-medium text-[var(--docs-text)]">
+                  Recent persona ingestion failures
+                </h3>
+                <p className="mb-2 text-sm text-[var(--docs-muted)]">
+                  Failed file ingestion jobs with extraction or chunking errors.
+                </p>
+                <div className="overflow-hidden rounded-lg border border-[var(--docs-border)] bg-white">
+                  {jobsOverviewLoading && !jobsOverview ? (
+                    <div className="p-4 text-sm text-[var(--docs-muted)]">Loading ingestion failures…</div>
+                  ) : !jobsOverview || jobsOverview.personaIngestion.recentFailures.length === 0 ? (
+                    <div className="p-4 text-sm text-[var(--docs-muted)]">No recent ingestion failures.</div>
+                  ) : (
+                    <table className="min-w-full divide-y divide-[var(--docs-border)]">
+                      <thead className="bg-[var(--docs-code-bg)]">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">File</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Persona</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Source</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Updated</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--docs-muted)]">Error</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--docs-border)]">
+                        {jobsOverview.personaIngestion.recentFailures.map((job) => (
+                          <tr key={job.fileId}>
+                            <td className="px-3 py-3 text-sm text-[var(--docs-text)]">{job.fileName}</td>
+                            <td className="px-3 py-3 text-xs text-[var(--docs-muted)]">{job.personaId}</td>
+                            <td className="px-3 py-3 text-xs text-[var(--docs-muted)]">{job.sourceType}</td>
+                            <td className="px-3 py-3 text-xs text-[var(--docs-muted)]">{formatDate(job.updatedAt)}</td>
+                            <td className="px-3 py-3 text-xs text-red-700">{job.lastError}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1264,7 +1340,7 @@ export default function ConfigPage() {
                 </p>
               </div>
               <div className="docs-path mb-3 inline-block">
-                GET/POST /api/admin/personas/:personaId/documents · POST .../documents/:docId/index · DELETE .../documents/:docId
+                GET/POST /api/admin/personas/:personaId/documents · POST .../documents/:docId/index · POST .../documents/reindex-all · DELETE .../documents/:docId
               </div>
               {ragError && (
                 <p className="mb-2 text-sm text-red-600" role="alert">
@@ -1305,6 +1381,14 @@ export default function ConfigPage() {
                   className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
                 >
                   {ragDocumentsLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleRagReindexAll()}
+                  disabled={!ragPersonaId || ragReindexAllLoading}
+                  className="rounded-lg border border-[var(--docs-border)] bg-white px-3 py-2 text-sm text-[var(--docs-text)] hover:border-[var(--docs-accent)] hover:bg-[var(--docs-code-bg)] disabled:opacity-50"
+                >
+                  {ragReindexAllLoading ? 'Queueing all…' : 'Reindex all files'}
                 </button>
               </div>
               <div className="overflow-hidden rounded-lg border border-[var(--docs-border)] bg-white">

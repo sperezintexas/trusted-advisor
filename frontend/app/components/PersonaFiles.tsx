@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   fetchPersonaFiles,
   addPersonaFile,
+  uploadPersonaFile,
   removePersonaFile,
   indexPersonaFile,
   formatFileSize,
@@ -23,6 +24,7 @@ export default function PersonaFiles({ personaId, personaName }: PersonaFilesPro
   const [error, setError] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [addingFile, setAddingFile] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [indexingId, setIndexingId] = useState<string | null>(null)
 
@@ -68,6 +70,21 @@ export default function PersonaFiles({ personaId, personaName }: PersonaFilesPro
     setAddingFile(false)
   }
 
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setUploadingFile(true)
+    setError(null)
+    const result = await uploadPersonaFile(personaId, file)
+    setUploadingFile(false)
+    if (result?.success) {
+      await loadFiles()
+      return
+    }
+    setError(result?.message || 'Failed to upload file')
+  }
+
   const handleRemoveFile = async (fileId: string) => {
     if (!confirm('Remove this file from the persona?')) return
 
@@ -104,13 +121,25 @@ export default function PersonaFiles({ personaId, personaName }: PersonaFilesPro
         <h3 className="text-sm font-semibold text-[var(--docs-text)]">
           Attached Files
         </h3>
-        <button
-          type="button"
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="text-sm text-[var(--docs-accent)] hover:underline"
-        >
-          {showAddForm ? 'Cancel' : '+ Add File'}
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="cursor-pointer text-sm text-[var(--docs-accent)] hover:underline">
+            {uploadingFile ? 'Uploading...' : '+ Upload local file'}
+            <input
+              type="file"
+              className="hidden"
+              accept=".pdf,.txt,.md,.markdown,text/plain,text/markdown,application/pdf"
+              onChange={handleUploadFile}
+              disabled={uploadingFile}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="text-sm text-[var(--docs-accent)] hover:underline"
+          >
+            {showAddForm ? 'Cancel' : '+ Add repo/URL reference'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -223,7 +252,7 @@ export default function PersonaFiles({ personaId, personaName }: PersonaFilesPro
                       onClick={() => setIndexingId(indexingId === file.id ? null : file.id)}
                       className="text-xs text-[var(--docs-accent)] hover:underline"
                     >
-                      Index
+                      Queue index
                     </button>
                   )}
                   <button
@@ -240,7 +269,7 @@ export default function PersonaFiles({ personaId, personaName }: PersonaFilesPro
               {indexingId === file.id && (
                 <div className="mt-3 space-y-2">
                   <label className="block text-xs font-medium text-[var(--docs-muted)]">
-                    Paste file content to index:
+                    Paste file content to queue indexing:
                   </label>
                   <textarea
                     value={fileContent}
@@ -256,7 +285,7 @@ export default function PersonaFiles({ personaId, personaName }: PersonaFilesPro
                       disabled={!fileContent.trim()}
                       className="rounded-lg bg-[var(--docs-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                     >
-                      Index Content
+                      Queue Indexing
                     </button>
                     <button
                       type="button"

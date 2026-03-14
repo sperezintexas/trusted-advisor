@@ -32,6 +32,7 @@ export type AddFileRequest = {
   sourceFileId: string
   sourceUrl?: string
   name: string
+  content?: string
   mimeType?: string
   sizeBytes?: number
 }
@@ -107,6 +108,36 @@ export async function indexPersonaFile(
       }
     )
     if (!res.ok) return null
+    return (await res.json()) as PersonaFileResponse
+  } catch {
+    return null
+  }
+}
+
+export async function uploadPersonaFile(
+  personaId: string,
+  file: File
+): Promise<PersonaFileResponse | null> {
+  try {
+    const formData = new FormData()
+    formData.set('file', file)
+    const opts = defaultFetchOptions()
+    const headers = new Headers(opts.headers as HeadersInit)
+    headers.delete('Content-Type')
+    const res = await fetch(apiUrl(`/personas/${personaId}/files/upload`), {
+      ...opts,
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return {
+        success: false,
+        message: (body as { message?: string }).message ?? `Upload failed: ${res.status}`,
+        file: null,
+      }
+    }
     return (await res.json()) as PersonaFileResponse
   } catch {
     return null

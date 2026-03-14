@@ -52,7 +52,9 @@ class CoachQuestionGenerationSchedulerService(
                         id = configId,
                         examCode = exam.code,
                         enabled = false,
-                        personaId = personaService.findDefaultCoachPersona()?.id ?: "finance-coach",
+                        personaId = personaService.findCoachPersonaForExam(exam.code)?.id
+                            ?: personaService.findDefaultCoachPersona()?.id
+                            ?: "finance-coach",
                         targetPoolSize = exam.totalQuestionsInOutline,
                         intervalMinutes = 60,
                         chunkSize = chunkSize,
@@ -228,7 +230,9 @@ class CoachQuestionGenerationSchedulerService(
             id = configId(examCode),
             examCode = examCode,
             enabled = false,
-            personaId = personaService.findDefaultCoachPersona()?.id ?: "finance-coach",
+            personaId = personaService.findCoachPersonaForExam(examCode)?.id
+                ?: personaService.findDefaultCoachPersona()?.id
+                ?: "finance-coach",
             targetPoolSize = target,
             intervalMinutes = 60,
             chunkSize = chunkSize,
