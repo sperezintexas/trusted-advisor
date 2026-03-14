@@ -7,8 +7,10 @@ import com.atxbogart.trustedadvisor.repository.PersonaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.apache.pdfbox.Loader
-import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.text.PDFTextStripper
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.UUID
@@ -27,6 +29,7 @@ data class AddFileRequest(
     val sourceFileId: String,
     val sourceUrl: String? = null,
     val name: String,
+    val content: String? = null,
     val mimeType: String? = null,
     val sizeBytes: Long? = null
 )
@@ -37,6 +40,12 @@ data class PersonaEvidenceChunk(
     val chunkIndex: Int,
     val content: String,
     val tokenCount: Int
+)
+
+data class PersonaBulkReindexResult(
+    val queued: Int,
+    val skipped: Int,
+    val failed: Int
 )
 
 @Service
@@ -98,12 +107,17 @@ class PersonaFileService(
             mimeType = request.mimeType,
             sizeBytes = request.sizeBytes,
             status = FileIndexStatus.PENDING,
+            pendingContent = null,
             createdBy = userId,
             createdAt = now,
             updatedAt = now
         )
 
         val saved = personaFileRepository.save(file)
+        val savedId = saved.id
+        if (!request.content.isNullOrBlank() && savedId != null) {
+            return queueIndexing(savedId, request.content)
+        }
         log.info("[persona-file] Added file {} to persona {} by {}", saved.id, personaId, userId)
         return PersonaFileResult.Success(saved)
     }
@@ -122,8 +136,11 @@ class PersonaFileService(
         if (existingCount >= MAX_FILES_PER_PERSONA) {
             return PersonaFileResult.Error("Maximum files per persona ($MAX_FILES_PER_PERSONA) reached")
         }
-        val content = extractTextFromBytes(bytes, contentType)
-            ?: return PersonaFileResult.Error("Unsupported file type or encoding. Use PDF, text/plain, or text/markdown.")
+        val extraction = extractTextFromBytes(bytes, contentType)
+        val content = when (extraction) {
+            is TextExtraction.Success -> extraction.content
+            is TextExtraction.Error -> return PersonaFileResult.Error(extraction.message)
+        }
         val sourceFileId = "upload-${UUID.randomUUID()}"
         val now = LocalDateTime.now(ZoneOffset.UTC)
         val file = PersonaFile(
@@ -135,20 +152,25 @@ class PersonaFileService(
             mimeType = contentType,
             sizeBytes = bytes.size.toLong(),
             status = FileIndexStatus.PENDING,
+            pendingContent = null,
             createdBy = userId,
             createdAt = now,
             updatedAt = now
         )
         val saved = personaFileRepository.save(file)
         val savedId = saved.id ?: return PersonaFileResult.Error("Failed to persist uploaded file ID")
-        return when (val indexResult = indexFileContent(savedId, content)) {
-            is PersonaFileResult.Success -> indexResult
-            is PersonaFileResult.Error -> indexResult
-            else -> PersonaFileResult.Success(personaFileRepository.findById(savedId).orElse(saved))
-        }
+        return queueIndexing(savedId, content)
     }
 
-    private fun extractTextFromBytes(bytes: ByteArray, contentType: String?): String? {
+    private sealed class TextExtraction {
+        data class Success(val content: String) : TextExtraction()
+        data class Error(val message: String) : TextExtraction()
+    }
+
+    private fun extractTextFromBytes(bytes: ByteArray, contentType: String?): TextExtraction {
+        if (bytes.isEmpty()) {
+            return TextExtraction.Error("File is empty")
+        }
         val mime = contentType?.lowercase()?.substringBefore(';')?.trim() ?: ""
         return when {
             mime == "application/pdf" || contentType == null && bytes.take(4) == listOf(0x25.toByte(), 0x50.toByte(), 0x44.toByte(), 0x46.toByte()) ->
@@ -156,23 +178,56 @@ class PersonaFileService(
             mime.startsWith("text/plain") ||
                 mime.startsWith("text/markdown") ||
                 mime == "text/md" ->
-                String(bytes, Charsets.UTF_8)
-            else -> try {
-                String(bytes, Charsets.UTF_8)
-            } catch (e: Exception) {
-                null
+                decodeUtf8(bytes)
+            else -> {
+                if (looksBinary(bytes)) {
+                    TextExtraction.Error("Unsupported binary file. Use PDF, text/plain, or text/markdown.")
+                } else {
+                    decodeUtf8(bytes)
+                }
             }
         }
     }
 
-    private fun extractTextFromPdf(bytes: ByteArray): String? {
+    private fun decodeUtf8(bytes: ByteArray): TextExtraction {
+        return try {
+            val decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+            val text = decoder.decode(ByteBuffer.wrap(bytes)).toString()
+            if (text.isBlank()) {
+                TextExtraction.Error("Extracted text is empty; cannot index file.")
+            } else {
+                TextExtraction.Success(text)
+            }
+        } catch (_: Exception) {
+            TextExtraction.Error("Unknown binary decode. Only UTF-8 text/markdown and PDF are supported.")
+        }
+    }
+
+    private fun looksBinary(bytes: ByteArray): Boolean {
+        if (bytes.isEmpty()) return false
+        val sample = bytes.take(2048)
+        val nonTextCount = sample.count { b ->
+            val unsigned = b.toInt() and 0xff
+            unsigned == 0 || (unsigned < 9) || (unsigned in 14..31)
+        }
+        return nonTextCount > sample.size / 10
+    }
+
+    private fun extractTextFromPdf(bytes: ByteArray): TextExtraction {
         return try {
             Loader.loadPDF(bytes).use { doc ->
-                PDFTextStripper().getText(doc)
+                val text = PDFTextStripper().getText(doc)
+                if (text.isBlank()) {
+                    TextExtraction.Error("PDF text extraction returned empty content; file cannot be indexed.")
+                } else {
+                    TextExtraction.Success(text)
+                }
             }
         } catch (e: Exception) {
             log.warn("[persona-file] PDF text extraction failed: {}", e.message)
-            null
+            TextExtraction.Error("Failed to extract PDF text. Ensure the PDF is not image-only or encrypted.")
         }
     }
 
@@ -195,7 +250,88 @@ class PersonaFileService(
             return PersonaFileResult.Error("No chunks to reindex; upload content first.")
         }
         val content = chunks.joinToString("\n\n") { it.content }
-        return indexFileContent(fileId, content)
+        return queueIndexing(fileId, content)
+    }
+
+    fun queueReindexAllForPersona(personaId: String): PersonaBulkReindexResult? {
+        if (!personaRepository.existsById(personaId)) return null
+        val files = personaFileRepository.findByPersonaId(personaId)
+        var queued = 0
+        var skipped = 0
+        var failed = 0
+
+        files.forEach { file ->
+            val fileId = file.id
+            if (fileId.isNullOrBlank()) {
+                failed++
+                return@forEach
+            }
+            val pendingContent = file.pendingContent
+            if (!pendingContent.isNullOrBlank()) {
+                when (queueIndexing(fileId, pendingContent)) {
+                    is PersonaFileResult.Success -> queued++
+                    else -> failed++
+                }
+                return@forEach
+            }
+            val chunks = personaFileChunkRepository.findByFileIdOrderByChunkIndexAsc(fileId)
+            if (chunks.isEmpty()) {
+                skipped++
+                return@forEach
+            }
+            val content = chunks.joinToString("\n\n") { it.content }.trim()
+            if (content.isBlank()) {
+                skipped++
+                return@forEach
+            }
+            when (queueIndexing(fileId, content)) {
+                is PersonaFileResult.Success -> queued++
+                else -> failed++
+            }
+        }
+
+        return PersonaBulkReindexResult(
+            queued = queued,
+            skipped = skipped,
+            failed = failed
+        )
+    }
+
+    fun queueIndexing(fileId: String, content: String): PersonaFileResult {
+        val file = personaFileRepository.findById(fileId).orElse(null)
+            ?: return PersonaFileResult.NotFound
+        if (content.isBlank()) {
+            return PersonaFileResult.Error("Extracted text is empty; cannot queue indexing.")
+        }
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+        val updated = file.copy(
+            status = FileIndexStatus.PENDING,
+            pendingContent = content,
+            lastError = null,
+            updatedAt = now
+        )
+        val saved = personaFileRepository.save(updated)
+        log.info("[persona-file] Queued indexing for file {}", fileId)
+        return PersonaFileResult.Success(saved)
+    }
+
+    fun processNextPendingFile() {
+        val pending = personaFileRepository.findTop20ByStatusOrderByUpdatedAtAsc(FileIndexStatus.PENDING)
+            .firstOrNull { !it.pendingContent.isNullOrBlank() }
+            ?: return
+        val fileId = pending.id ?: return
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+        personaFileRepository.save(
+            pending.copy(
+                status = FileIndexStatus.INDEXING,
+                lastError = null,
+                updatedAt = now
+            )
+        )
+        val result = indexFileContent(fileId, pending.pendingContent ?: "")
+        if (result is PersonaFileResult.Error) {
+            log.warn("[persona-file] Async indexing failed for {}: {}", fileId, result.message)
+        }
     }
 
     fun indexFileContent(fileId: String, content: String): PersonaFileResult {
@@ -224,6 +360,7 @@ class PersonaFileService(
                 status = FileIndexStatus.INDEXED,
                 chunkCount = chunks.size,
                 lastError = null,
+                pendingContent = null,
                 updatedAt = now
             )
             val saved = personaFileRepository.save(updatedFile)
@@ -235,6 +372,7 @@ class PersonaFileService(
             val failedFile = file.copy(
                 status = FileIndexStatus.FAILED,
                 lastError = e.message,
+                pendingContent = null,
                 updatedAt = LocalDateTime.now(ZoneOffset.UTC)
             )
             personaFileRepository.save(failedFile)

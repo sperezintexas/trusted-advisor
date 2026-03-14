@@ -7,7 +7,12 @@ import { useAuth } from '@/lib/auth'
 import { apiUrl, defaultFetchOptions } from '@/lib/api'
 
 type ChatRole = 'user' | 'assistant'
-type ChatMessage = { role: ChatRole; content: string }
+type ChatCitation = {
+  url: string
+  title: string | null
+  sourceType: string | null
+}
+type ChatMessage = { role: ChatRole; content: string; citations?: ChatCitation[] }
 type Persona = { id: string; name: string; description: string }
 
 type ApiUsage = {
@@ -60,10 +65,28 @@ const toChatMessages = (value: unknown): ChatMessage[] => {
     const content = item.content
 
     if ((role === 'user' || role === 'assistant') && typeof content === 'string') {
-      return [{ role, content }]
+      return [{ role, content, citations: [] }]
     }
 
     return []
+  })
+}
+
+const toChatCitations = (value: unknown): ChatCitation[] => {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return []
+    const url = typeof item.url === 'string' ? item.url.trim() : ''
+    if (!url) return []
+    const title =
+      typeof item.title === 'string' && item.title.trim()
+        ? item.title.trim()
+        : null
+    const sourceType =
+      typeof item.sourceType === 'string' && item.sourceType.trim()
+        ? item.sourceType.trim()
+        : null
+    return [{ url, title, sourceType }]
   })
 }
 
@@ -230,8 +253,9 @@ function ChatContent() {
             total_tokens: typeof data.usage.total_tokens === 'number' ? data.usage.total_tokens : undefined,
           }
         : null
+      const citations = isRecord(data) ? toChatCitations(data.citations) : []
       setLastApiUsage(usage)
-      setMessages((prev) => [...prev, { role: 'assistant', content: response }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: response, citations }])
     } catch (err) {
       const message = errorMessage(err)
       setSendError(message)
@@ -240,6 +264,7 @@ function ChatContent() {
         {
           role: 'assistant',
           content: `I hit an error while sending your request: ${message}`,
+          citations: [],
         },
       ])
     } finally {
@@ -334,8 +359,44 @@ function ChatContent() {
                     {msg.content}
                   </div>
                 ) : (
-                  <div className="max-w-[90%] whitespace-pre-wrap rounded-xl border border-[var(--docs-border)] bg-[var(--docs-bg)] px-3 py-2 text-sm text-[var(--docs-text)]">
-                    {msg.content}
+                  <div className="max-w-[90%] rounded-xl border border-[var(--docs-border)] bg-[var(--docs-bg)] px-3 py-2 text-sm text-[var(--docs-text)]">
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    {msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-2 border-t border-[var(--docs-border)] pt-2">
+                        <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--docs-muted)]">
+                          Sources
+                        </p>
+                        <ul className="space-y-1">
+                          {msg.citations.map((citation, citationIndex) => {
+                            const label =
+                              citation.title ??
+                              citation.url
+                            const isHttp = citation.url.startsWith('http://') || citation.url.startsWith('https://')
+                            return (
+                              <li key={`${citation.url}-${citationIndex}`} className="text-xs">
+                                {isHttp ? (
+                                  <a
+                                    href={citation.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[var(--docs-accent)] hover:underline"
+                                  >
+                                    {label}
+                                  </a>
+                                ) : (
+                                  <span className="text-[var(--docs-muted)]">{label}</span>
+                                )}
+                                {citation.sourceType ? (
+                                  <span className="ml-1 text-[10px] uppercase tracking-wide text-[var(--docs-muted)]">
+                                    ({citation.sourceType})
+                                  </span>
+                                ) : null}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

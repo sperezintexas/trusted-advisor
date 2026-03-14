@@ -4,11 +4,13 @@ import com.atxbogart.trustedadvisor.config.ApiKeyPrincipal
 import com.atxbogart.trustedadvisor.model.AccessRequest
 import com.atxbogart.trustedadvisor.model.CoachExamAttempt
 import com.atxbogart.trustedadvisor.model.ExamCode
+import com.atxbogart.trustedadvisor.model.FileIndexStatus
 import com.atxbogart.trustedadvisor.model.PersonaFile
 import com.atxbogart.trustedadvisor.model.RecommendationStatus
 import com.atxbogart.trustedadvisor.model.User
 import com.atxbogart.trustedadvisor.model.UserRole
 import com.atxbogart.trustedadvisor.repository.CoachExamAttemptRepository
+import com.atxbogart.trustedadvisor.repository.PersonaFileRepository
 import com.atxbogart.trustedadvisor.repository.UserRepository
 import com.atxbogart.trustedadvisor.service.AccessRequestResult
 import com.atxbogart.trustedadvisor.service.AccessRequestService
@@ -41,6 +43,7 @@ class AdminController(
     private val accessRequestService: AccessRequestService,
     private val userRepository: UserRepository,
     private val coachExamAttemptRepository: CoachExamAttemptRepository,
+    private val personaFileRepository: PersonaFileRepository,
     private val coachService: CoachService,
     private val personaFileService: PersonaFileService,
     private val questionGeneratorService: QuestionGeneratorService,
@@ -404,7 +407,7 @@ class AdminController(
         val contentType = file.contentType
         return when (val result = personaFileService.addFileFromUpload(personaId, filename, bytes, contentType, email)) {
             is PersonaFileResult.Success -> ResponseEntity.ok(
-                AdminDocumentResponse(success = true, message = "Document uploaded and indexed", document = result.file.toAdminDocumentView())
+                AdminDocumentResponse(success = true, message = "Document uploaded and indexing queued", document = result.file.toAdminDocumentView())
             )
             is PersonaFileResult.PersonaNotFound -> ResponseEntity.notFound().build()
             is PersonaFileResult.Error -> ResponseEntity.badRequest().body(
@@ -427,7 +430,7 @@ class AdminController(
         }
         val content = body?.content
         val result = if (!content.isNullOrBlank()) {
-            personaFileService.indexFileContent(docId, content)
+            personaFileService.queueIndexing(docId, content)
         } else {
             personaFileService.reindexFromStoredChunks(docId)
         }
@@ -439,7 +442,7 @@ class AdminController(
                     )
                 } else {
                     ResponseEntity.ok(
-                        AdminDocumentResponse(success = true, message = "Document reindexed", document = result.file.toAdminDocumentView())
+                        AdminDocumentResponse(success = true, message = "Document indexing queued", document = result.file.toAdminDocumentView())
                     )
                 }
             }
@@ -449,6 +452,30 @@ class AdminController(
             )
             else -> ResponseEntity.badRequest().build()
         }
+    }
+
+    @PostMapping("/personas/{personaId}/documents/reindex-all")
+    fun reindexAllPersonaDocuments(
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?,
+        @PathVariable personaId: String
+    ): ResponseEntity<AdminBulkReindexResponse> {
+        val email = getCurrentEmail(principal) ?: return ResponseEntity.status(401).build()
+        if (!isAdmin(email)) {
+            return ResponseEntity.status(403).build()
+        }
+        val result = personaFileService.queueReindexAllForPersona(personaId)
+            ?: return ResponseEntity.notFound().build()
+        val message = "Queued ${result.queued} files for reindexing (${result.skipped} skipped, ${result.failed} failed)."
+        return ResponseEntity.ok(
+            AdminBulkReindexResponse(
+                success = true,
+                message = message,
+                personaId = personaId,
+                queued = result.queued,
+                skipped = result.skipped,
+                failed = result.failed
+            )
+        )
     }
 
     @DeleteMapping("/personas/{personaId}/documents/{docId}")
@@ -572,6 +599,10 @@ class AdminController(
         val recent = coachExamAttemptRepository.findTop20ByRecommendationStatusInOrderByCompletedAtDesc(
             listOf(RecommendationStatus.QUEUED, RecommendationStatus.PROCESSING, RecommendationStatus.FAILED)
         )
+        val personaQueued = personaFileRepository.countByStatus(FileIndexStatus.PENDING)
+        val personaIndexing = personaFileRepository.countByStatus(FileIndexStatus.INDEXING)
+        val personaFailed = personaFileRepository.countByStatus(FileIndexStatus.FAILED)
+        val recentPersonaFailures = personaFileRepository.findTop10ByStatusOrderByUpdatedAtDesc(FileIndexStatus.FAILED)
         val fullExamCache = coachService.getFullExamCacheStatuses().map {
             FullExamCacheView(
                 examCode = it.examCode.name,
@@ -591,6 +622,12 @@ class AdminController(
                     failed = failed,
                     ready = ready,
                     recent = recent.map { it.toRecommendationJobView() }
+                ),
+                personaIngestion = PersonaIngestionOverview(
+                    queued = personaQueued,
+                    indexing = personaIndexing,
+                    failed = personaFailed,
+                    recentFailures = recentPersonaFailures.map { it.toPersonaIngestionFailureView() }
                 ),
                 fullExamCache = fullExamCache
             )
@@ -676,6 +713,15 @@ class AdminController(
         completedAt = completedAt.toString(),
         recommendationUpdatedAt = recommendationUpdatedAt?.toString(),
         recommendationError = recommendationError
+    )
+
+    private fun PersonaFile.toPersonaIngestionFailureView() = PersonaIngestionFailureView(
+        fileId = id ?: "",
+        personaId = personaId,
+        fileName = name,
+        sourceType = sourceType.name,
+        updatedAt = updatedAt.toString(),
+        lastError = lastError ?: "Unknown failure"
     )
 }
 
@@ -772,6 +818,15 @@ data class ReindexRequestBody(
     val content: String? = null
 )
 
+data class AdminBulkReindexResponse(
+    val success: Boolean,
+    val message: String,
+    val personaId: String,
+    val queued: Int,
+    val skipped: Int,
+    val failed: Int
+)
+
 data class GenerateQuestionsRequestBody(
     val count: Int? = 10,
     val examCode: String? = null,
@@ -797,7 +852,24 @@ data class CoachGenerationConfigUpdateRequest(
 
 data class AdminJobsOverviewResponse(
     val recommendationQueue: RecommendationQueueOverview,
+    val personaIngestion: PersonaIngestionOverview,
     val fullExamCache: List<FullExamCacheView>
+)
+
+data class PersonaIngestionOverview(
+    val queued: Long,
+    val indexing: Long,
+    val failed: Long,
+    val recentFailures: List<PersonaIngestionFailureView>
+)
+
+data class PersonaIngestionFailureView(
+    val fileId: String,
+    val personaId: String,
+    val fileName: String,
+    val sourceType: String,
+    val updatedAt: String,
+    val lastError: String
 )
 
 data class RecommendationQueueOverview(

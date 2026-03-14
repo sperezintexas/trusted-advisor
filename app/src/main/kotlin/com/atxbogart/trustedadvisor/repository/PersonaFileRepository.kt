@@ -11,8 +11,11 @@ interface PersonaFileRepository : MongoRepository<PersonaFile, String> {
     fun findByPersonaId(personaId: String): List<PersonaFile>
     fun findByPersonaIdAndStatus(personaId: String, status: FileIndexStatus): List<PersonaFile>
     fun findByPersonaIdAndSourceFileId(personaId: String, sourceFileId: String): PersonaFile?
+    fun findTop20ByStatusOrderByUpdatedAtAsc(status: FileIndexStatus): List<PersonaFile>
+    fun findTop10ByStatusOrderByUpdatedAtDesc(status: FileIndexStatus): List<PersonaFile>
     fun deleteByPersonaId(personaId: String)
     fun countByPersonaId(personaId: String): Long
+    fun countByStatus(status: FileIndexStatus): Long
 }
 
 @Repository

@@ -22,7 +22,9 @@ class CoachLearningPlanService(
         passingPercentage: Int,
         missedTopics: List<String>
     ): LearningPlanRecommendation {
-        val defaultCoachPersonaId = personaService.findDefaultCoachPersona()?.id ?: "finance-coach"
+        val defaultCoachPersonaId = personaService.findCoachPersonaForExam(examCode)?.id
+            ?: personaService.findDefaultCoachPersona()?.id
+            ?: "finance-coach"
         val prompt = """
             Student just completed a ${examCode.name} practice exam.
             Result: $correct / $total correct (${String.format("%.1f", percentage)}%).

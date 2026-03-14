@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken
+import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -107,11 +108,43 @@ class PersonaController(
         @PathVariable fileId: String,
         @RequestBody request: IndexFileRequest
     ): ResponseEntity<PersonaFileResponse> {
-        return when (val result = fileService.indexFileContent(fileId, request.content)) {
+        return when (val result = fileService.queueIndexing(fileId, request.content)) {
             is PersonaFileResult.Success -> ResponseEntity.ok(
-                PersonaFileResponse(success = true, message = "File indexed", file = result.file.toView())
+                PersonaFileResponse(success = true, message = "Indexing job queued", file = result.file.toView())
             )
             is PersonaFileResult.NotFound -> ResponseEntity.notFound().build()
+            is PersonaFileResult.Error -> ResponseEntity.badRequest().body(
+                PersonaFileResponse(success = false, message = result.message, file = null)
+            )
+            else -> ResponseEntity.badRequest().build()
+        }
+    }
+
+    @PostMapping("/{personaId}/files/upload")
+    fun uploadFile(
+        @PathVariable personaId: String,
+        @RequestParam("file") file: MultipartFile,
+        @AuthenticationPrincipal principal: ApiKeyPrincipal?
+    ): ResponseEntity<PersonaFileResponse> {
+        if (file.isEmpty) {
+            return ResponseEntity.badRequest().body(
+                PersonaFileResponse(success = false, message = "File is empty", file = null)
+            )
+        }
+        val userId = getCurrentUserId(principal)
+        return when (
+            val result = fileService.addFileFromUpload(
+                personaId = personaId,
+                filename = file.originalFilename ?: "document",
+                bytes = file.bytes,
+                contentType = file.contentType,
+                userId = userId
+            )
+        ) {
+            is PersonaFileResult.Success -> ResponseEntity.ok(
+                PersonaFileResponse(success = true, message = "File uploaded and indexing queued", file = result.file.toView())
+            )
+            is PersonaFileResult.PersonaNotFound -> ResponseEntity.notFound().build()
             is PersonaFileResult.Error -> ResponseEntity.badRequest().body(
                 PersonaFileResponse(success = false, message = result.message, file = null)
             )

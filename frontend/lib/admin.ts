@@ -202,6 +202,15 @@ export type AdminDocumentResponse = {
   document: AdminDocumentView | null
 }
 
+export type AdminBulkReindexResponse = {
+  success: boolean
+  message: string
+  personaId: string
+  queued: number
+  skipped: number
+  failed: number
+}
+
 export async function fetchPersonaDocuments(
   personaId: string
 ): Promise<AdminDocumentListResponse | null> {
@@ -267,6 +276,24 @@ export async function reindexPersonaDocument(
     )
     if (!res.ok) return null
     return (await res.json()) as AdminDocumentResponse
+  } catch {
+    return null
+  }
+}
+
+export async function reindexAllPersonaDocuments(
+  personaId: string
+): Promise<AdminBulkReindexResponse | null> {
+  try {
+    const res = await fetch(
+      apiUrl(`/admin/personas/${personaId}/documents/reindex-all`),
+      {
+        ...defaultFetchOptions(),
+        method: 'POST',
+      }
+    )
+    if (!res.ok) return null
+    return (await res.json()) as AdminBulkReindexResponse
   } catch {
     return null
   }
@@ -349,6 +376,19 @@ export type AdminJobsOverviewResponse = {
     failed: number
     ready: number
     recent: RecommendationJobView[]
+  }
+  personaIngestion: {
+    queued: number
+    indexing: number
+    failed: number
+    recentFailures: Array<{
+      fileId: string
+      personaId: string
+      fileName: string
+      sourceType: string
+      updatedAt: string
+      lastError: string
+    }>
   }
   fullExamCache: Array<{
     examCode: string
