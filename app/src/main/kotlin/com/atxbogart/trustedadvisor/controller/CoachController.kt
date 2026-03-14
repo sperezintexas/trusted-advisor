@@ -224,5 +224,8 @@ class CoachController(
         val attrs = principal.attributes
         return (attrs["email"] as? String)
             ?: (attrs["login"] as? String)?.let { "$it@github.local" }
+            ?: (attrs["preferred_username"] as? String)?.let { "$it@x.local" }
+            ?: (attrs["username"] as? String)?.let { "$it@x.local" }
+            ?: (attrs["sub"] as? String)?.let { "x-$it@x.local" }
     }
 }

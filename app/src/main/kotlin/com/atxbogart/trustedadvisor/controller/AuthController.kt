@@ -17,7 +17,6 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken
-import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -73,7 +72,7 @@ class AuthController(
     }
 
     @PostMapping("/logout")
-    fun logout(request: HttpServletRequest): ResponseEntity<Void> {
+    fun logout(@Suppress("UNUSED_PARAMETER") request: HttpServletRequest): ResponseEntity<Void> {
         if (authDebug) log.info("[auth] POST /api/logout")
         return ResponseEntity.noContent().build()
     }
@@ -252,10 +251,13 @@ class AuthController(
 
     private fun getOAuth2Info(): OAuth2Info? {
         val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
-        val principal = auth.principal as? OAuth2User ?: return null
+        val principal = auth.principal
         val attrs = principal.attributes
         val provider = auth.authorizedClientRegistrationId
-        val displayName = (attrs["name"] as? String) ?: (attrs["login"] as? String)
+        val displayName = (attrs["name"] as? String)
+            ?: (attrs["preferred_username"] as? String)
+            ?: (attrs["username"] as? String)
+            ?: (attrs["login"] as? String)
         val profileImageUrl = (attrs["picture"] as? String) ?: (attrs["avatar_url"] as? String)
         return OAuth2Info(provider, displayName, profileImageUrl)
     }
@@ -419,10 +421,13 @@ class AuthController(
 
     private fun currentEmailFromOAuth2(): String? {
         val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
-        val principal = auth.principal as? OAuth2User ?: return null
+        val principal = auth.principal
         val attrs = principal.attributes
         return (attrs["email"] as? String)
             ?: (attrs["login"] as? String)?.let { "$it@github.local" }
+            ?: (attrs["preferred_username"] as? String)?.let { "$it@x.local" }
+            ?: (attrs["username"] as? String)?.let { "$it@x.local" }
+            ?: (attrs["sub"] as? String)?.let { "x-$it@x.local" }
     }
 }
 

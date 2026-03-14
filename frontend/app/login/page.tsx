@@ -58,6 +58,11 @@ export default function LoginPage() {
     window.location.href = '/oauth2/authorization/github'
   }
 
+  function loginWithX() {
+    // Route through frontend rewrite so deployed builds never hardcode localhost backend.
+    window.location.href = '/oauth2/authorization/x'
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-[var(--docs-bg)]">
       <AppHeader />
@@ -67,7 +72,7 @@ export default function LoginPage() {
             Sign in
           </h1>
           <p className="mt-2 text-sm text-[var(--docs-muted)]">
-            Sign in with your Google or GitHub account. Only emails pre-approved
+            Sign in with your Google, GitHub, or X account. Only emails pre-approved
             in the system can access Trusted Advisor.
           </p>
           <div className="mt-6 space-y-3">
@@ -109,6 +114,16 @@ export default function LoginPage() {
                 />
               </svg>
               Continue with GitHub
+            </button>
+            <button
+              type="button"
+              onClick={loginWithX}
+              className="flex w-full items-center justify-center gap-3 rounded-lg bg-black px-4 py-3 text-sm font-medium text-white hover:bg-[#111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--docs-accent)] focus-visible:ring-offset-2"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18.244 2h3.308l-7.228 8.26L22.828 22h-6.658l-5.214-6.817L4.99 22H1.68l7.73-8.835L1.25 2h6.827l4.713 6.231L18.244 2zm-1.16 18h1.833L7.082 3.895H5.114L17.084 20z" />
+              </svg>
+              Continue with X
             </button>
           </div>
           {debugOn && (
