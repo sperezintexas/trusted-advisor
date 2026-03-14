@@ -90,6 +90,15 @@ function formatDate(iso: string): string {
   }
 }
 
+function normalizeLearningPlanSummary(summary: string, passed: boolean): string {
+  if (!passed) return summary
+  const lowered = summary.toLowerCase()
+  const clearlyIncorrectPassedMessage =
+    lowered.includes('below the passing mark') || lowered.includes('points below')
+  if (!clearlyIncorrectPassedMessage) return summary
+  return 'You are above the passing mark. Keep momentum by reinforcing weak topics and maintaining timed mixed sets to preserve pace and confidence.'
+}
+
 export default function CoachHistoryPage() {
   const [attempts, setAttempts] = useState<CoachExamAttempt[]>([])
   const [loading, setLoading] = useState(true)
@@ -183,7 +192,9 @@ export default function CoachHistoryPage() {
                 {a.recommendation && (
                   <div className="mt-3 rounded border border-[var(--docs-border)] bg-white p-3 text-sm">
                     <p className="font-medium text-[var(--docs-text)]">Learning plan</p>
-                    <p className="mt-1 text-[var(--docs-text)]">{a.recommendation.summary}</p>
+                    <p className="mt-1 text-[var(--docs-text)]">
+                      {normalizeLearningPlanSummary(a.recommendation.summary, a.passed)}
+                    </p>
                     {a.recommendation.suggestedTopics.length > 0 && (
                       <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--docs-text)]">
                         {a.recommendation.suggestedTopics.map((topic) => (
