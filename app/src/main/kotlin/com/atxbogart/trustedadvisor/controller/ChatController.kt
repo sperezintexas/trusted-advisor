@@ -18,7 +18,6 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken
-import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -87,9 +86,12 @@ class ChatController(
 
     private fun currentEmailFromOAuth2(): String? {
         val auth = SecurityContextHolder.getContext().authentication as? OAuth2AuthenticationToken ?: return null
-        val principal = auth.principal as? OAuth2User ?: return null
+        val principal = auth.principal
         val attrs = principal.attributes
         return (attrs["email"] as? String)
             ?: (attrs["login"] as? String)?.let { "$it@github.local" }
+            ?: (attrs["preferred_username"] as? String)?.let { "$it@x.local" }
+            ?: (attrs["username"] as? String)?.let { "$it@x.local" }
+            ?: (attrs["sub"] as? String)?.let { "x-$it@x.local" }
     }
 }
